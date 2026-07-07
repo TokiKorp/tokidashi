@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Genome, VisibleState } from '../game/types';
+import { ENEMY_SPRITES } from './enemies';
 import { buildSpriteGrid, GRID } from './sprites';
 
 const STATES: Exclude<VisibleState, 'egg'>[] = [
@@ -64,6 +65,16 @@ describe('sprite procédural', () => {
         row.split('').map((ch, x) => ({ ch, y, x })).filter((p) => p.ch === 'k' || p.ch === 'w'),
       );
       expect(eyes.length).toBeGreaterThanOrEqual(8); // 2 yeux 2×2 + bouche
+    }
+  });
+
+  it("les sprites d'ennemis sont des grilles 12×12 bien formées", () => {
+    for (const [id, def] of Object.entries(ENEMY_SPRITES)) {
+      expect(def.frames.length, id).toBe(2);
+      for (const frame of def.frames) {
+        expect(frame.length, id).toBe(12);
+        for (const row of frame) expect(row.length, `${id} ligne`).toBe(12);
+      }
     }
   });
 

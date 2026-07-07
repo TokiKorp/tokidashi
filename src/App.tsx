@@ -89,6 +89,8 @@ export default function App() {
           pendingCrumbs={c.pendingCrumbs}
           cosmetics={c.cosmetics.equipped}
           children={c.children}
+          threatId={c.activeEvent?.eventId ?? null}
+          onDefend={store.defend}
           onCollect={c.pendingCrumbs >= 1 ? store.collect : undefined}
           onTap={c.stage === 'egg' ? store.tapEgg : undefined}
         />
@@ -103,7 +105,6 @@ export default function App() {
           const left = Math.max(0, c.activeEvent.expiresAtActive - c.activeSeconds);
           return (
             <button className="event-threat" onClick={store.defend} title="Clique pour le chasser !">
-              <span className="event-emoji">{def?.emoji ?? '⚠️'}</span>
               <span className="event-label">
                 {def?.label} — chasse-le !
                 <span className="event-timer">

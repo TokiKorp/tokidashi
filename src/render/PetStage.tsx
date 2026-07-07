@@ -5,6 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Sprite, Texture } from 'pixi.js';
 import type { Genome, StageCode, VisibleState } from '../game/types';
+import { ENEMY_PALETTE, ENEMY_SPRITES, enemyMotion } from './enemies';
 import { gridToCanvas } from './pixel';
 import { buildSprite } from './sprites';
 
@@ -25,8 +26,28 @@ interface Props {
   cosmetics?: string[];
   /** Petits adoptés — mini-sprites aux pieds du Compagnon. */
   children?: Genome[];
+  /** Menace en cours (id d'événement) : ennemi animé, cliquable pour chasser. */
+  threatId?: string | null;
+  onDefend?: () => void;
   onCollect?: () => void;
   onTap?: () => void;
+}
+
+// Textures d'ennemis (2 frames), construites à la demande.
+const enemyTextureCache = new Map<string, [Texture, Texture]>();
+
+function getEnemyTextures(id: string): [Texture, Texture] | null {
+  const def = ENEMY_SPRITES[id];
+  if (!def) return null;
+  if (!enemyTextureCache.has(id)) {
+    const pair = def.frames.map((g) => {
+      const tex = Texture.from(gridToCanvas(g, ENEMY_PALETTE));
+      tex.source.scaleMode = 'nearest';
+      return tex;
+    }) as [Texture, Texture];
+    enemyTextureCache.set(id, pair);
+  }
+  return enemyTextureCache.get(id)!;
 }
 
 const STAGE_SCALE: Record<StageCode, number> = {
@@ -113,6 +134,8 @@ export function PetStage({
   pendingCrumbs = 0,
   cosmetics = [],
   children = [],
+  threatId = null,
+  onDefend,
   onCollect,
   onTap,
 }: Props) {
@@ -124,6 +147,10 @@ export function PetStage({
   const growthRef = useRef(growth);
   const stageRef = useRef(stage);
   const onCollectRef = useRef(onCollect);
+  const onDefendRef = useRef(onDefend);
+  onDefendRef.current = onDefend;
+  const enemyRef = useRef<{ id: string; sprite: Sprite } | null>(null);
+  const enemyLayerRef = useRef<Container | null>(null);
   const childrenRef = useRef(children);
   childrenRef.current = children;
   const crumbCountRef = useRef(0);
@@ -178,6 +205,15 @@ export function PetStage({
       sprite.position.set(STAGE_W / 2, STAGE_H - 4);
       a.stage.addChild(sprite);
       spriteRef.current = sprite;
+
+      // Couche des ennemis (au premier plan — c'est eux qu'on doit cliquer).
+      const enemyLayer = new Container();
+      enemyLayer.eventMode = 'static';
+      enemyLayer.cursor = 'pointer';
+      enemyLayer.on('pointertap', () => onDefendRef.current?.());
+      a.stage.addChild(enemyLayer);
+      enemyLayerRef.current = enemyLayer;
+      spawnEnemy(threatIdRef.current);
 
       let t = 0;
       a.ticker.add((ticker) => {
@@ -270,6 +306,21 @@ export function PetStage({
           kid.scale.set(3, 3 * (1 + 0.03 * Math.sin(t / 380 + i * 2.1)));
         });
 
+        // — Ennemi : battement d'ailes / marche / picorage + trajectoire.
+        const enemy = enemyRef.current;
+        if (enemy) {
+          const def = ENEMY_SPRITES[enemy.id];
+          const textures = getEnemyTextures(enemy.id);
+          if (def && textures) {
+            enemy.sprite.texture = textures[Math.floor(t / def.frameMs) % 2];
+            const { x, y } = enemyMotion(enemy.id, t);
+            enemy.sprite.position.set(x, y);
+            // Il regarde dans sa direction de déplacement.
+            const { x: xNext } = enemyMotion(enemy.id, t + 50);
+            enemy.sprite.scale.x = xNext < x ? 3 : -3;
+          }
+        }
+
         // Ramassées : petite envolée + fondu.
         leavingRef.current = leavingRef.current.filter((l) => {
           const p = (t - l.start) / FADE_MS;
@@ -292,6 +343,8 @@ export function PetStage({
       crumbsRef.current = [];
       heightsRef.current = new Array(BUCKETS).fill(0);
       leavingRef.current = [];
+      enemyLayerRef.current = null;
+      enemyRef.current = null;
       app?.destroy(true);
     };
   }, []);
@@ -332,6 +385,30 @@ export function PetStage({
     populateChildren(childrenRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childKey]);
+
+  // Apparition / disparition de l'ennemi en cours.
+  function spawnEnemy(id: string | null): void {
+    const layer = enemyLayerRef.current;
+    if (!layer) return;
+    if (enemyRef.current) {
+      enemyRef.current.sprite.destroy();
+      enemyRef.current = null;
+    }
+    if (id && ENEMY_SPRITES[id]) {
+      const sprite = new Sprite(getEnemyTextures(id)![0]);
+      sprite.anchor.set(0.5, 1);
+      sprite.scale.set(3);
+      layer.addChild(sprite);
+      enemyRef.current = { id, sprite };
+    }
+  }
+
+  const threatIdRef = useRef(threatId);
+  threatIdRef.current = threatId;
+  useEffect(() => {
+    spawnEnemy(threatId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threatId]);
 
   // Synchronise les sprites de miettes avec le compte disponible (1 pour 1) :
   // les nouvelles VOLENT depuis le Compagnon vers une colonne aléatoire et se
