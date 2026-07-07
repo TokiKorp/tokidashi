@@ -1,7 +1,6 @@
 name: 'publish'
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -47,54 +46,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Bump version and push tag
-        if: github.ref == 'refs/heads/main'
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Release Tag
-        id: get_tag
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "tag=${{ steps.tag_version.outputs.new_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Setup Node.js
-        if: steps.get_tag.outputs.tag != ''
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: 'npm'
 
       - name: Install Rust stable
-        if: steps.get_tag.outputs.tag != ''
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install frontend dependencies
-        if: steps.get_tag.outputs.tag != ''
         run: npm ci
 
       - name: Build and release
-        if: steps.get_tag.outputs.tag != ''
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ steps.get_tag.outputs.tag }}
-          releaseName: 'Tokidachi ${{ steps.get_tag.outputs.tag }}'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Tokidachi ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
           args: --target universal-apple-darwin
 
       - name: Update Homebrew Cask
-        if: steps.get_tag.outputs.tag != ''
         env:
           TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
@@ -107,7 +85,7 @@ jobs:
           fi
 
           # Extract version from tag (e.g., v0.1.0 -> 0.1.0)
-          TAG="${{ steps.get_tag.outputs.tag }}"
+          TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
           echo "Releasing version: $VERSION"
 
