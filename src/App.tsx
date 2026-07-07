@@ -3,7 +3,7 @@ import './App.css';
 import { crumbJarFull } from './game/actions';
 import { eventById, skillById } from './game/config';
 import { growthFactor } from './game/genome';
-import { crumbCap, crumbRatePerHour, visibleState } from './game/sim';
+import { containerOf, crumbCap, crumbRatePerHour, visibleState } from './game/sim';
 import { PetStage } from './render/PetStage';
 import { initSessionListeners } from './state/session';
 import { startGameLoop, useTokidachi } from './state/store';
@@ -173,9 +173,14 @@ export default function App() {
             )}
 
             {jarCap > 0 && (
-              <button className="jar" onClick={store.collect} disabled={c.pendingCrumbs < 1}>
-                🫙 {formatCrumbs(c.pendingCrumbs)}/{formatCrumbs(jarCap)} Miettes · +
-                {Math.round(crumbRatePerHour(c, cfg))}/h
+              <button
+                className="jar"
+                onClick={store.collect}
+                disabled={c.pendingCrumbs < 1}
+                title={`Contenant : ${containerOf(c, cfg).label} (améliorable à la Boutique)`}
+              >
+                {containerOf(c, cfg).emoji} {formatCrumbs(c.pendingCrumbs)}/{formatCrumbs(jarCap)}{' '}
+                Miettes · +{Math.round(crumbRatePerHour(c, cfg))}/h
                 {crumbJarFull(c, cfg) ? ' — plein !' : ''}
                 {c.pendingCrumbs >= 1 ? ' (ramasser)' : ''}
               </button>

@@ -49,6 +49,7 @@ export function createCompanion(
     foodHeat: {},
     cosmetics: { owned: [], equipped: [] },
     children: [],
+    containerLevel: 0,
     activeEvent: null,
     nextEventAtActive: 15 * 60 + rng() * 15 * 60, // premier événement entre 15 et 30 min
     lastPlayAtActive: -Infinity,
@@ -153,9 +154,8 @@ export function startLearning(
   if (c.skills.length >= cfg.stages[c.stage].skillSlots) {
     return { ok: false, reason: 'Plus de slot de compétence à ce stade.' };
   }
-  if (c.skills.some((sp) => sp.state === 'learning' || sp.upgrading)) {
-    return { ok: false, reason: 'Il étudie déjà quelque chose.' };
-  }
+  const busy = studyBusyReason(c, cfg);
+  if (busy) return { ok: false, reason: busy };
 
   if (def.costCurrency === 'crumbs') {
     if (wallet.crumbs < def.cost) return { ok: false, reason: 'Pas assez de Miettes.' };
@@ -169,6 +169,23 @@ export function startLearning(
 
   c.skills.push({ skillId, state: 'learning', trainedSeconds: 0, level: 0, upgrading: false });
   return { ok: true, events: [] };
+}
+
+/** Études simultanées : une de base + une par petit (ils aident aux devoirs). */
+export function maxStudies(c: CompanionState, cfg: GameConfig): number {
+  return cfg.baseStudySlots + c.children.length;
+}
+
+export function studyingCount(c: CompanionState): number {
+  return c.skills.filter((sp) => sp.state === 'learning' || sp.upgrading).length;
+}
+
+function studyBusyReason(c: CompanionState, cfg: GameConfig): string | null {
+  const max = maxStudies(c, cfg);
+  if (studyingCount(c) < max) return null;
+  return max === 1
+    ? 'Il étudie déjà quelque chose (adopte des petits pour étudier en parallèle).'
+    : `Toutes les études sont occupées (${max} en parallèle avec la famille).`;
 }
 
 /** Améliorer une compétence acquise : payer le niveau suivant puis ré-étudier. */
@@ -187,9 +204,8 @@ export function startUpgrade(
   if (sp.level >= maxLevelOf(cfg, skillId)) {
     return { ok: false, reason: 'Déjà au niveau maximum.' };
   }
-  if (c.skills.some((p) => p.state === 'learning' || p.upgrading)) {
-    return { ok: false, reason: 'Il étudie déjà quelque chose.' };
-  }
+  const busy = studyBusyReason(c, cfg);
+  if (busy) return { ok: false, reason: busy };
 
   const cost = upgradeCost(cfg, def.cost, sp.level + 1);
   if (def.costCurrency === 'crumbs') {
@@ -287,6 +303,21 @@ export function buyChild(
   const refused = pay(wallet, capacity, 'crumbs', childCost(cfg, c.children.length));
   if (refused) return refused;
   c.children.push(generateGenome(rng));
+  return { ok: true, events: [] };
+}
+
+/** Améliorer le contenant à Miettes : Bocal → Poubelle → Piscine → Coffre… */
+export function upgradeContainer(
+  c: CompanionState,
+  wallet: WalletState,
+  cfg: GameConfig,
+): ActionResult {
+  if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
+  const next = cfg.containers[c.containerLevel + 1];
+  if (!next) return { ok: false, reason: 'Contenant déjà ultime !' };
+  if (wallet.crumbs < next.cost) return { ok: false, reason: 'Pas assez de Miettes.' };
+  wallet.crumbs -= next.cost;
+  c.containerLevel += 1;
   return { ok: true, events: [] };
 }
 

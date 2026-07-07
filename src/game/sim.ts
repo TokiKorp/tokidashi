@@ -221,19 +221,26 @@ function stepSim(
     }
   }
 
-  // — Production : les compétences acquises génèrent des Miettes, modulées par
-  //   l'Humeur et le niveau, dans un stock plafonné (GDD §7).
+  // — Production : compétences (niveaux compris) + petits, modulée par
+  //   l'Humeur, dans un stock plafonné (GDD §7). Même source de vérité que
+  //   le débit affiché et le plafond (productionPerHour).
   const cap = crumbCap(c, cfg);
-  for (const sp of c.skills) {
-    if (sp.state !== 'owned') continue;
-    const def = skillById(cfg, sp.skillId);
-    if (!def?.crumbsPerHour) continue;
-    const rate = def.crumbsPerHour * levelScale(cfg, sp.level) * cfg.moodMultiplier(c.mood);
+  const rate = productionPerHour(c, cfg) * cfg.moodMultiplier(c.mood);
+  if (rate > 0) {
     const before = c.pendingCrumbs;
     c.pendingCrumbs = Math.min(cap, c.pendingCrumbs + (rate / HOUR) * s);
     if (before < cap && c.pendingCrumbs >= cap) {
       events.push({ type: 'crumb-cap-reached' });
     }
+  }
+
+  // — Les petits grignotent les Miettes : le pot d'abord, puis le portefeuille.
+  if (c.children.length > 0) {
+    let bite = (c.children.length * cfg.childCrumbEatPerHour * s) / HOUR;
+    const fromPot = Math.min(bite, c.pendingCrumbs);
+    c.pendingCrumbs -= fromPot;
+    bite -= fromPot;
+    if (bite > 0) wallet.crumbs = Math.max(0, wallet.crumbs - bite);
   }
 
   // — Auto-ramassage (Majordome) : vide le pot quand il déborde.
@@ -408,8 +415,13 @@ function productionPerHour(c: CompanionState, cfg: GameConfig): number {
   return perHour;
 }
 
+/** Contenant courant (borné à la chaîne définie en config). */
+export function containerOf(c: CompanionState, cfg: GameConfig) {
+  return cfg.containers[Math.min(c.containerLevel, cfg.containers.length - 1)];
+}
+
 export function crumbCap(c: CompanionState, cfg: GameConfig): number {
-  return productionPerHour(c, cfg) * cfg.crumbCapHours;
+  return productionPerHour(c, cfg) * cfg.crumbCapHours * containerOf(c, cfg).capMultiplier;
 }
 
 /** Débit de production effectif (Miettes/h), Humeur comprise — pour l'UI. */

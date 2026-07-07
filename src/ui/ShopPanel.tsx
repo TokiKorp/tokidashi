@@ -3,6 +3,7 @@
 // le sprite ; les petits aident à la production de Miettes.
 
 import { childCost } from '../game/config';
+import { containerOf } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatCrumbs, formatTokens } from './format';
 
@@ -17,12 +18,14 @@ interface Props {
 }
 
 export function ShopPanel({ onClose }: Props) {
-  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild } = useTokidachi();
+  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild, upgradeContainer } = useTokidachi();
   const c = game.companion;
   if (!c) return null;
 
   const nextChildPrice = childCost(cfg, c.children.length);
   const houseFull = c.children.length >= cfg.maxChildren;
+  const container = containerOf(c, cfg);
+  const nextContainer = cfg.containers[c.containerLevel + 1];
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
@@ -67,10 +70,28 @@ export function ShopPanel({ onClose }: Props) {
         </section>
 
         <section>
+          <h3>Contenant à Miettes</h3>
+          <p className="panel-hint">
+            Actuel : {container.emoji} {container.label} (plafond ×{container.capMultiplier}).
+            Un grand contenant stocke plus… et attire plus de pillards.
+          </p>
+          {nextContainer ? (
+            <button className="btn-primary" onClick={upgradeContainer}>
+              Passer au {nextContainer.emoji} {nextContainer.label} (×
+              {nextContainer.capMultiplier}) — 🍞 {nextContainer.cost}
+            </button>
+          ) : (
+            <p className="panel-hint">👝 Contenant ultime atteint !</p>
+          )}
+        </section>
+
+        <section>
           <h3>Adoption</h3>
           <p className="panel-hint">
-            Un petit compagnon au génome aléatoire, qui rapporte +{cfg.childProductionPerHour}{' '}
-            Miettes/h. Famille : {c.children.length}/{cfg.maxChildren}.
+            Un petit au génome aléatoire : +{cfg.childProductionPerHour} Miettes/h de récolte,
+            une étude en parallèle de plus… mais il mange ({cfg.childCrumbEatPerHour} Miettes/h
+            et +{cfg.childMetabolismPerHour} d'appétit du foyer). Famille : {c.children.length}/
+            {cfg.maxChildren}.
           </p>
           <button className="btn-primary" onClick={buyChild} disabled={houseFull}>
             {houseFull ? 'La maison est pleine !' : `Adopter un petit — 🍞 ${nextChildPrice}`}

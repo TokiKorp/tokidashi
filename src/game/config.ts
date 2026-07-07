@@ -2,6 +2,7 @@
 // L'équilibrage se fait dans ce fichier sans toucher à la simulation.
 
 import type {
+  ContainerDef,
   CosmeticDef,
   EventDef,
   FoodDef,
@@ -78,6 +79,13 @@ export interface GameConfig {
   childProductionPerHour: number;
   /** Chaque petit creuse l'appétit du foyer (Satiété/h en plus). */
   childMetabolismPerHour: number;
+  /** Chaque petit grignote aussi les Miettes (pot d'abord, puis portefeuille). */
+  childCrumbEatPerHour: number;
+  /** Études simultanées de base — chaque petit en offre une de plus. */
+  baseStudySlots: number;
+
+  /** Chaîne des contenants à Miettes (multiplie le plafond du pot). */
+  containers: ContainerDef[];
 
   devCapacityBudget: number;
   simSpeed: number;
@@ -455,6 +463,18 @@ export const DEFAULT_CONFIG: GameConfig = {
   maxChildren: 4,
   childProductionPerHour: 15,
   childMetabolismPerHour: 10,
+  childCrumbEatPerHour: 8,
+  baseStudySlots: 1,
+
+  // Un pot plus grand = plus de réserve idle… et plus d'appât pour les pillards.
+  containers: [
+    { label: 'Bocal', emoji: '🫙', capMultiplier: 1, cost: 0 },
+    { label: 'Poubelle', emoji: '🗑️', capMultiplier: 2.5, cost: 400 },
+    { label: 'Piscine', emoji: '🏊', capMultiplier: 6, cost: 2_500 },
+    { label: 'Coffre-fort', emoji: '🔐', capMultiplier: 15, cost: 12_000 },
+    { label: 'Silo à grains', emoji: '🌾', capMultiplier: 40, cost: 60_000 },
+    { label: 'Dimension de poche', emoji: '👝', capMultiplier: 100, cost: 300_000 },
+  ],
 
   devCapacityBudget: 1_000_000,
   simSpeed: 1,

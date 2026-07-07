@@ -140,6 +140,8 @@ export interface CompanionState {
   cosmetics: { owned: string[]; equipped: string[] };
   /** Petits adoptés à la boutique — génome aléatoire, aident à la production. */
   children: Genome[];
+  /** Niveau du contenant à Miettes (index dans cfg.containers). */
+  containerLevel: number;
   /** Événement en cours (menace à chasser d'un clic avant l'échéance). */
   activeEvent: ActiveEvent | null;
   /** Prochain événement aléatoire, en activeSeconds. */
@@ -167,6 +169,15 @@ export interface MemorialEntry {
   activeSeconds: number;
   bornAtIso: string;
   diedAtIso: string;
+}
+
+/** Contenant à Miettes : chaque niveau multiplie le plafond du pot. */
+export interface ContainerDef {
+  label: string;
+  emoji: string;
+  capMultiplier: number;
+  /** Coût en Miettes pour ATTEINDRE ce niveau (0 pour le premier). */
+  cost: number;
 }
 
 /** Cosmétique équipable (GDD §6.3) — rendu en pixels sur le sprite. */

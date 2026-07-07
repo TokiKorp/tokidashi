@@ -19,6 +19,7 @@ import {
   startLearning,
   startUpgrade,
   tapEgg as tapEggAction,
+  upgradeContainer as upgradeContainerAction,
 } from '../game/actions';
 import { DEFAULT_CONFIG, eventById, foodById, skillById, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
@@ -79,6 +80,7 @@ interface TokidachiStore {
   buyCosmetic(id: string): void;
   toggleCosmetic(id: string): void;
   buyChild(): void;
+  upgradeContainer(): void;
   buryAndRestart(name: string): void;
   setLocked(locked: boolean): void;
   markAway(): void;
@@ -128,6 +130,7 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
     c.foodHeat ??= {};
     c.cosmetics ??= { owned: [], equipped: [] };
     c.children ??= [];
+    c.containerLevel ??= 0;
     c.activeEvent ??= null;
     // Ancien nom de stade (avant les 5 niveaux d'évolution).
     if ((c.stage as string) === 'child') c.stage = 'kid' as StageCode;
@@ -456,6 +459,20 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       return;
     }
     set({ game: next, notice: '🥚 Un petit rejoint la famille !' });
+    void writeSave(makeSave(get()));
+  },
+
+  upgradeContainer() {
+    const { game, cfg } = get();
+    if (!game.companion) return;
+    const next = structuredClone(game);
+    const res = upgradeContainerAction(next.companion!, next.wallet, cfg);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    const label = cfg.containers[next.companion!.containerLevel].label;
+    set({ game: next, notice: `📦 Nouveau contenant : ${label} !` });
     void writeSave(makeSave(get()));
   },
 

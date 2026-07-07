@@ -2,6 +2,7 @@
 // branche est une chaîne à prérequis repliable ; chaque compétence affiche
 // le STADE requis et son niveau. C'est la bascule vers l'autosuffisance.
 
+import { maxStudies, studyingCount } from '../game/actions';
 import { maxLevelOf, upgradeCost } from '../game/sim';
 import type { SkillCategory, SkillDef } from '../game/types';
 import { useTokidachi } from '../state/store';
@@ -58,7 +59,9 @@ export function SkillPanel({ onClose }: Props) {
 
   const byId = new Map(cfg.skills.map((s) => [s.id, s]));
   const stageIndex = cfg.stageOrder.indexOf(c.stage);
-  const studying = c.skills.some((sp) => sp.state === 'learning' || sp.upgrading);
+  const studies = studyingCount(c);
+  const studyMax = maxStudies(c, cfg);
+  const studying = studies >= studyMax;
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
@@ -66,7 +69,9 @@ export function SkillPanel({ onClose }: Props) {
         <h2>Arbre de compétences</h2>
         <p className="panel-hint">
           {cfg.skills.length} compétences · slots : {c.skills.length}/
-          {cfg.stages[c.stage].skillSlots} au stade {cfg.stages[c.stage].label}
+          {cfg.stages[c.stage].skillSlots} au stade {cfg.stages[c.stage].label} · études :{' '}
+          {studies}/{studyMax}
+          {c.children.length > 0 && ' (les petits aident aux devoirs)'}
         </p>
 
         {CATEGORY_ORDER.map((cat) => {

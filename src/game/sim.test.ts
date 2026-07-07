@@ -13,6 +13,7 @@ import {
   startLearning,
   startUpgrade,
   tapEgg,
+  upgradeContainer,
 } from './actions';
 import { DEFAULT_CONFIG, foodById, skillById, type GameConfig } from './config';
 import { growthFactor } from './genome';
@@ -536,6 +537,65 @@ describe('événements aléatoires : pillards et aubaines', () => {
     advanceSim(naked, wallet(), cfg.eventWindowSeconds + 90, quiet);
     advanceSim(armored, wallet(), cfg.eventWindowSeconds + 90, quiet);
     expect(100 - armored.pendingCrumbs).toBeLessThan(100 - naked.pendingCrumbs);
+  });
+});
+
+describe('famille et contenants', () => {
+  const KID_GENOME = { seed: 1, hue: 10, shape: 0 as const, earStyle: 0 as const, spots: false };
+
+  it("chaque petit offre une étude en parallèle de plus", () => {
+    const c = child();
+    c.stage = 'teen';
+    c.children = [KID_GENOME, { ...KID_GENOME, seed: 2 }];
+    const w = wallet(50_000);
+    const cap = capacity();
+    // 1 de base + 2 petits = 3 études simultanées.
+    expect(startLearning(c, w, cap, 'crumb-forage', cfg).ok).toBe(true);
+    expect(startLearning(c, w, cap, 'lean-stomach', cfg).ok).toBe(true);
+    expect(startLearning(c, w, cap, 'hug-expert', cfg).ok).toBe(true);
+    expect(startLearning(c, w, cap, 'epouvantail', cfg).ok).toBe(false); // plus de place
+    // …et les trois études progressent EN MÊME TEMPS.
+    c.satiety = 100;
+    advanceSim(c, w, skillById(cfg, 'crumb-forage')!.trainSeconds + 60, cfg);
+    expect(c.skills.filter((sp) => sp.state === 'owned').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('le contenant améliore le plafond du pot (Bocal → Poubelle → …)', () => {
+    const c = child();
+    c.skills = [{ skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const base = crumbCap(c, cfg);
+    const w = wallet(cfg.containers[1].cost);
+    expect(upgradeContainer(c, w, cfg).ok).toBe(true);
+    expect(w.crumbs).toBe(0);
+    expect(crumbCap(c, cfg)).toBeCloseTo(base * cfg.containers[1].capMultiplier, 5);
+    // Sans le sou, pas de Piscine.
+    expect(upgradeContainer(c, wallet(0), cfg).ok).toBe(false);
+  });
+
+  it('les petits grignotent le pot, puis le portefeuille', () => {
+    // Production des petits neutralisée pour isoler leur appétit.
+    const greedy: GameConfig = { ...cfg, childProductionPerHour: 0 };
+    const c = child();
+    c.satiety = 100;
+    c.nextEventAtActive = Infinity;
+    c.children = [KID_GENOME, { ...KID_GENOME, seed: 2 }];
+    c.pendingCrumbs = 3;
+    const w = wallet(100);
+    advanceSim(c, w, HOUR, greedy);
+    // 2 petits × 8/h = 16 mangées : le pot (3) d'abord, puis ~13 au portefeuille.
+    expect(c.pendingCrumbs).toBe(0);
+    expect(w.crumbs).toBeCloseTo(100 - (16 - 3), 0);
+  });
+
+  it('les petits produisent aussi dans le pot (net positif si bien gérés)', () => {
+    const c = child();
+    c.satiety = 100;
+    c.mood = 50; // multiplicateur ×1
+    c.nextEventAtActive = Infinity;
+    c.children = [KID_GENOME, { ...KID_GENOME, seed: 2 }];
+    advanceSim(c, wallet(), HOUR, cfg);
+    // +30/h produites, −16/h mangées → net ≈ +14 dans le pot.
+    expect(c.pendingCrumbs).toBeCloseTo(2 * (cfg.childProductionPerHour - cfg.childCrumbEatPerHour), 0);
   });
 });
 
