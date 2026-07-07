@@ -3,9 +3,10 @@
 // budget de capacité auto-imposé).
 
 import { DevProvider } from './devProvider';
+import { RealCliProvider } from './realCliProvider';
 import type { AIProvider } from './provider';
 
-const providers: AIProvider[] = [new DevProvider()];
+const providers: AIProvider[] = [new DevProvider(), new RealCliProvider()];
 
 export function listProviders(): AIProvider[] {
   return providers;

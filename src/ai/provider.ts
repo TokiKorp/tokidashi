@@ -29,7 +29,7 @@ export interface Reaction {
   source: 'ai' | 'scripted';
 }
 
-export type ProviderKind = 'dev' | 'free' | 'paid';
+export type ProviderKind = 'dev' | 'free' | 'paid' | 'cli';
 
 export interface AIProvider {
   readonly id: string;

@@ -8,6 +8,8 @@ export interface SaveData {
   version: 1;
   game: GameState;
   providerId: string;
+  selectedCli?: 'random' | 'agy' | 'codex' | 'claude';
+  devMode?: boolean;
   savedAtIso: string;
 }
 

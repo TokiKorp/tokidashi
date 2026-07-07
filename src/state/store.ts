@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { providerById } from '../ai';
 import type { ReactionContext } from '../ai';
+import { runCliQuery, pickCli, pickRandomQuestion, shortenResponse } from '../ai/cliRunner';
 import {
   buyChild as buyChildAction,
   buyCosmetic as buyCosmeticAction,
@@ -19,10 +20,10 @@ import {
   startUpgrade,
   tapEgg as tapEggAction,
 } from '../game/actions';
-import { DEFAULT_CONFIG, eventById, foodById, type GameConfig } from '../game/config';
+import { DEFAULT_CONFIG, eventById, foodById, skillById, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
 import { moodBucket, reactionTier } from '../game/reactions';
-import { advanceSim, defendEvent, scheduleNextEvent } from '../game/sim';
+import { advanceSim, defendEvent, scheduleNextEvent, effectiveFoodCost, skillModifiers, upgradeCost } from '../game/sim';
 import type { GameState, SimEvent, StageCode } from '../game/types';
 import { clearSave, loadSave, writeSave } from './persist';
 
@@ -53,6 +54,8 @@ interface TokidachiStore {
   game: GameState;
   cfg: GameConfig;
   providerId: string;
+  selectedCli: 'random' | 'agy' | 'codex' | 'claude';
+  devMode: boolean;
   locked: boolean;
   reaction: ReactionBubble | null;
   notice: string | null;
@@ -79,6 +82,13 @@ interface TokidachiStore {
   dismissNotice(): void;
   dismissReaction(): void;
 
+  setProvider(providerId: string): void;
+  setSelectedCli(cli: 'random' | 'agy' | 'codex' | 'claude'): void;
+  unlockDevMode(key: string): void;
+
+  addTokensToBag(tokens: number, cliName: string): void;
+  ensureTokensAvailable(cost: number): Promise<boolean>;
+
   // Panneau dev
   setSimSpeed(x: number): void;
   refillCapacity(): void;
@@ -91,7 +101,7 @@ function freshGame(cfg: GameConfig): GameState {
     companion: null,
     wallet: { crumbs: 0 },
     // Mode DEV : TOKEN illimités par défaut (aucun coût réel de toute façon).
-    capacity: { budget: cfg.devCapacityBudget, used: 0, unlimited: true },
+    capacity: { budget: cfg.devCapacityBudget, used: 0, unlimited: true, tokenBag: 0 },
     memorial: [],
     bornAtIso: null,
   };
@@ -120,6 +130,7 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
     game.capacity.used = 0;
   }
   game.capacity.unlimited ??= true;
+  game.capacity.tokenBag ??= 0;
   return game;
 }
 
@@ -170,6 +181,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   game: freshGame(DEFAULT_CONFIG),
   cfg: DEFAULT_CONFIG,
   providerId: 'dev',
+  selectedCli: 'random',
+  devMode: false,
   locked: false,
   reaction: null,
   notice: null,
@@ -178,9 +191,14 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   async init() {
     const save = await loadSave();
     if (save) {
+      const devMode = save.devMode ?? false;
+      const cfg = devMode ? get().cfg : { ...get().cfg, simSpeed: 1 };
       set({
         game: migrateGame(save.game, get().cfg),
         providerId: save.providerId,
+        selectedCli: save.selectedCli ?? 'random',
+        devMode,
+        cfg,
         loaded: true,
       });
     } else {
@@ -235,12 +253,24 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const food = foodById(cfg, foodId);
     if (!c || !food) return;
 
+    const mods = skillModifiers(c, cfg);
+    const cost = effectiveFoodCost(food, mods, c.foodHeat[food.id] ?? 0);
+
+    if (food.currency === 'token' && providerId === 'cli') {
+      const ok = await get().ensureTokensAvailable(cost);
+      if (!ok) return;
+    }
+
     const satietyBefore = c.satiety;
-    const next = structuredClone(game);
+    const next = structuredClone(get().game); // Use updated game state after potential refilling
     const res = feedAction(next.companion!, next.wallet, next.capacity, food, cfg);
     if (!res.ok) {
       set({ notice: res.reason });
       return;
+    }
+
+    if (food.currency === 'token' && providerId === 'cli') {
+      next.capacity.tokenBag = Math.max(0, (next.capacity.tokenBag ?? 0) - cost);
     }
 
     const seq = ++reactionSeq;
@@ -259,7 +289,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       satietyRestored: food.satiety,
       tier: reactionTier(food.satiety),
       currency: food.currency,
-      cost: food.cost,
+      cost,
       companionName: fed.name,
     };
     const reaction = await providerById(providerId).generateReaction(ctx);
@@ -291,28 +321,58 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
-  learn(skillId) {
-    const { game, cfg } = get();
+  async learn(skillId) {
+    const { game, cfg, providerId } = get();
     if (!game.companion) return;
-    const next = structuredClone(game);
+    const def = skillById(cfg, skillId);
+    if (!def) return;
+
+    const cost = def.cost;
+    if (def.costCurrency === 'token' && providerId === 'cli') {
+      const ok = await get().ensureTokensAvailable(cost);
+      if (!ok) return;
+    }
+
+    const next = structuredClone(get().game);
     const res = startLearning(next.companion!, next.wallet, next.capacity, skillId, cfg);
     if (!res.ok) {
       set({ notice: res.reason });
       return;
     }
+
+    if (def.costCurrency === 'token' && providerId === 'cli') {
+      next.capacity.tokenBag = Math.max(0, (next.capacity.tokenBag ?? 0) - cost);
+    }
+
     set({ game: next });
     void writeSave(makeSave(get()));
   },
 
-  upgrade(skillId) {
-    const { game, cfg } = get();
+  async upgrade(skillId) {
+    const { game, cfg, providerId } = get();
     if (!game.companion) return;
-    const next = structuredClone(game);
+    const def = skillById(cfg, skillId);
+    if (!def) return;
+    const sp = game.companion.skills.find((p) => p.skillId === skillId);
+    if (!sp) return;
+
+    const cost = upgradeCost(cfg, def.cost, sp.level + 1);
+    if (def.costCurrency === 'token' && providerId === 'cli') {
+      const ok = await get().ensureTokensAvailable(cost);
+      if (!ok) return;
+    }
+
+    const next = structuredClone(get().game);
     const res = startUpgrade(next.companion!, next.wallet, next.capacity, skillId, cfg);
     if (!res.ok) {
       set({ notice: res.reason });
       return;
     }
+
+    if (def.costCurrency === 'token' && providerId === 'cli') {
+      next.capacity.tokenBag = Math.max(0, (next.capacity.tokenBag ?? 0) - cost);
+    }
+
     set({ game: next });
     void writeSave(makeSave(get()));
   },
@@ -430,7 +490,106 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   dismissNotice: () => set({ notice: null }),
   dismissReaction: () => set({ reaction: null }),
 
+  setProvider(providerId) {
+    set({ providerId });
+    void writeSave(makeSave(get()));
+  },
+
+  setSelectedCli(selectedCli) {
+    set({ selectedCli });
+    void writeSave(makeSave(get()));
+  },
+
+  unlockDevMode(key) {
+    if (key.trim() === 'CLAUDIUSMAXIMUS') {
+      set({ devMode: true, notice: "Mode Dev activé !" });
+    } else {
+      set({ notice: "Clé secrète incorrecte !" });
+    }
+    void writeSave(makeSave(get()));
+  },
+
+  addTokensToBag(tokens, cliName) {
+    const next = structuredClone(get().game);
+    next.capacity.tokenBag = (next.capacity.tokenBag ?? 0) + tokens;
+    set({
+      game: next,
+      notice: `Obtenu +${tokens.toLocaleString()} TOKEN via ${cliName.toUpperCase()} ! Envoyé dans le sac.`
+    });
+    void writeSave(makeSave(get()));
+  },
+
+  async ensureTokensAvailable(cost) {
+    const { game, providerId } = get();
+    if (providerId !== 'cli') return true;
+
+    let bag = game.capacity.tokenBag ?? 0;
+    if (bag >= cost) return true;
+
+    while (bag < cost) {
+      const needed = cost - bag;
+      const selectedCli = get().selectedCli;
+      const cli = selectedCli === 'random' ? pickCli() : selectedCli;
+      const question = pickRandomQuestion();
+      const prompt = `${question} (Please answer in 1 very short sentence of max 12 words)`;
+      
+      const seq = ++reactionSeq;
+      set({ 
+        reaction: { 
+          text: `[${cli.toUpperCase()}] Remplissage du sac... (Besoin de ${needed.toLocaleString()} de plus)`,
+          source: 'ai',
+          seq
+        } 
+      });
+      
+      const result = await runCliQuery(cli, prompt);
+      if (result.success && result.tokens_consumed > 0) {
+        const added = result.tokens_consumed;
+        const shortened = shortenResponse(result.response);
+        bag += added;
+        
+        const next = structuredClone(get().game);
+        next.capacity.tokenBag = bag;
+        set({
+          game: next,
+          reaction: {
+            text: `[${result.cli_used.toUpperCase()}] ${shortened} (+${added.toLocaleString()} tokens)`,
+            source: 'ai',
+            seq
+          }
+        });
+        void writeSave(makeSave(get()));
+        
+        if (bag < cost) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      } else {
+        const fallback = 10000;
+        bag += fallback;
+        const next = structuredClone(get().game);
+        next.capacity.tokenBag = bag;
+        set({
+          game: next,
+          notice: `L'appel CLI a échoué (${result.error || 'erreur'}). Ajout d'urgence de +${fallback.toLocaleString()} TOKEN.`,
+          reaction: {
+            text: "Oups, le terminal a bogué...",
+            source: 'scripted',
+            seq
+          }
+        });
+        void writeSave(makeSave(get()));
+        break;
+      }
+    }
+    
+    return true;
+  },
+
   setSimSpeed(x) {
+    if (!get().devMode && x !== 1) {
+      set({ notice: "Activez le mode Dev pour modifier la vitesse !" });
+      return;
+    }
     set({ cfg: { ...get().cfg, simSpeed: x } });
   },
 
@@ -459,6 +618,8 @@ function makeSave(s: TokidachiStore) {
     version: 1 as const,
     game: s.game,
     providerId: s.providerId,
+    selectedCli: s.selectedCli,
+    devMode: s.devMode,
     savedAtIso: new Date().toISOString(),
   };
 }

@@ -14,6 +14,20 @@ npm run dev          # ou : version navigateur (fallback localStorage, sans lock
 
 Prérequis : Node ≥ 20 et Rust (`rustup`) pour la coque Tauri.
 
+## Installation (macOS via Homebrew)
+
+Pour installer l'application compagnon directement sur macOS sans compiler les sources :
+
+### Option A : Depuis votre clone local du projet
+```bash
+brew install --cask Formula/tokidachi.rb
+```
+
+### Option B : Directement depuis le dépôt distant
+```bash
+brew install --cask https://raw.githubusercontent.com/oncleguigs/tokidachi/main/Formula/tokidachi.rb
+```
+
 ## Tester
 
 ```bash

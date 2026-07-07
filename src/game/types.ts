@@ -158,6 +158,7 @@ export interface CapacityGauge {
   used: number;
   /** Mode DEV : capacité illimitée (aucune vérification de budget). */
   unlimited?: boolean;
+  tokenBag?: number;
 }
 
 export interface MemorialEntry {
