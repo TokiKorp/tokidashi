@@ -12,6 +12,8 @@ import { DevPanel } from './ui/DevPanel';
 import { FeedMenu } from './ui/FeedMenu';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './ui/format';
 import { Gauge } from './ui/Gauge';
+import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE } from './ui/icons';
+import { PixelIcon } from './ui/PixelIcon';
 import { ReportModal } from './ui/ReportModal';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
 import { ShopPanel } from './ui/ShopPanel';
@@ -176,20 +178,20 @@ export default function App() {
 
             <nav className="actions">
               <button className="btn-primary btn-icon" title="Nourrir" onClick={() => setPanel('feed')}>
-                🍽️
+                <PixelIcon grid={ICON_FEED} alt="Nourrir" />
               </button>
               <button className="btn-primary btn-icon" title="Jouer" onClick={store.play}>
-                🎾
+                <PixelIcon grid={ICON_PLAY} alt="Jouer" />
               </button>
               <button
                 className="btn-primary btn-icon"
                 title="Arbre de compétences"
                 onClick={() => setPanel('skills')}
               >
-                🌳
+                <PixelIcon grid={ICON_TREE} alt="Arbre de compétences" />
               </button>
               <button className="btn-primary btn-icon" title="Boutique" onClick={() => setPanel('shop')}>
-                🛍️
+                <PixelIcon grid={ICON_SHOP} alt="Boutique" />
               </button>
             </nav>
           </>

@@ -373,7 +373,15 @@ button {
 .btn-icon {
   font-size: 20px;
   line-height: 1;
-  padding: 7px 0;
+  padding: 6px 0;
+}
+
+.pixel-icon {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+  display: block;
+  margin: 0 auto;
 }
 
 .btn-primary:active,
