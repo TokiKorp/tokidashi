@@ -9,10 +9,15 @@ on:
 
 jobs:
   validate-rust-linux:
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -98,7 +103,7 @@ jobs:
             echo "TAP_GITHUB_TOKEN is not set. Skipping automated Homebrew Cask update."
             echo "To enable automatic updates, create a GitHub Personal Access Token (PAT) with repo scope,"
             echo "add it as a secret named TAP_GITHUB_TOKEN in this repository, and ensure the"
-            echo "public tap repository 'oncleguigs/homebrew-tap' exists."
+            echo "public tap repository 'basilelt/homebrew-tap' exists."
             exit 0
           fi
 
@@ -127,7 +132,7 @@ jobs:
           echo "Cask download filename: $URL_FILENAME"
 
           # Clone the tap repository
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/oncleguigs/homebrew-tap.git" homebrew-tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/basilelt/homebrew-tap.git" homebrew-tap
           cd homebrew-tap
 
           # Create Casks folder if not exists
