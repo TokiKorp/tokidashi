@@ -188,6 +188,8 @@ export interface EventDef {
   weight: number;
   /** Menace : description de ce qui est perdu si on ne réagit pas. */
   threatText?: string;
+  /** Ne se déclenche que si des petits ont été adoptés (OVNI…). */
+  requiresChildren?: boolean;
 }
 
 export interface ActiveEvent {

@@ -68,7 +68,8 @@ recharge de la capacité simulée, simulation du verrouillage, remise à zéro.
 - [x] **Miettes visibles et animées** : 1 sprite = 1 Miette dispo, envol depuis le Compagnon vers une position aléatoire, empilement par colonnes (carte de hauteurs), envolée au ramassage (clic) ; débit +N/h affiché
 - [x] **Arbre de 100 compétences** en 6 branches (Production, Automatisation, Efficacité, Conversion, Sociale, Défense), chaînes à prérequis, stade requis affiché, 2→30 slots selon le stade
 - [x] **Niveaux de compétences** : amélioration payante (coût ×1,8/niveau) + ré-étude, effet +50 %/niveau, max 5
-- [x] **Événements aléatoires** : corbeau/fourmis/pigeon à chasser d'un clic avant la fin du compte à rebours (sinon vol de Miettes/satiété), aubaines (pluie de miettes, papillon), branche Défense dédiée
+- [x] **Événements aléatoires** : corbeau/fourmis/pigeon/OVNI en sprites animés, à chasser d'un clic avant la fin du compte à rebours ; **le butin attire** (plus le pot déborde, plus les attaques sont fréquentes) ; l'**OVNI enlève un petit** si personne ne le chasse ; aubaines (pluie de miettes, papillon) ; branche Défense dédiée
+- [x] **Famille à charge** : chaque petit adopté produit (+15 Miettes/h) mais creuse l'appétit du foyer (+10 satiété/h)
 - [x] **Boutique** : 12 cosmétiques pixel art équipables (tête/visage/cou) + adoption de petits compagnons (génome aléatoire, +production, prix doublé)
 - [x] Gel au verrouillage (macOS) + rapport de retour
 - [x] Permadeath + mémorial, autosave

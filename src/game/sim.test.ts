@@ -22,6 +22,7 @@ import {
   crumbRatePerHour,
   defendEvent,
   levelScale,
+  scheduleNextEvent,
   upgradeCost,
   visibleState,
 } from './sim';
@@ -447,6 +448,78 @@ describe('événements aléatoires : pillards et aubaines', () => {
     expect(c.activeEvent).toBeNull();
     expect(c.pendingCrumbs).toBe(100); // rien volé
     expect(c.mood).toBeGreaterThan(50);
+  });
+
+  it('plus le pot déborde, plus les pillards rappliquent vite', () => {
+    const fixed: GameConfig = { ...cfg, rng: () => 0.5 };
+    const pauvre = child();
+    pauvre.pendingCrumbs = 0;
+    scheduleNextEvent(pauvre, fixed);
+    const riche = child();
+    riche.pendingCrumbs = 600;
+    scheduleNextEvent(riche, fixed);
+    expect(riche.nextEventAtActive).toBeLessThan(pauvre.nextEventAtActive);
+    // …mais jamais sous le plancher.
+    const cresus = child();
+    cresus.pendingCrumbs = 1_000_000;
+    scheduleNextEvent(cresus, fixed);
+    expect(cresus.nextEventAtActive - cresus.activeSeconds).toBeGreaterThanOrEqual(
+      cfg.eventIntervalFloorSeconds,
+    );
+  });
+
+  it("l'OVNI enlève un petit si personne ne le chasse", () => {
+    const c = child();
+    c.stage = 'teen';
+    c.satiety = 100;
+    c.children = [
+      { seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false },
+      { seed: 2, hue: 200, shape: 1, earStyle: 1, spots: true },
+    ];
+    c.activeEvent = {
+      eventId: 'ufo-abduction',
+      startedAtActive: c.activeSeconds,
+      expiresAtActive: c.activeSeconds + 10,
+    };
+    const quiet: GameConfig = { ...cfg, rng: () => 0.5 };
+    const events = advanceSim(c, wallet(), 120, quiet);
+    expect(events.some((e) => e.type === 'event-lost')).toBe(true);
+    expect(c.children.length).toBe(1);
+    expect(c.children[0].seed).toBe(1); // le dernier adopté est parti
+  });
+
+  it("l'OVNI ne rôde jamais sans petits à enlever", () => {
+    // Force le tirage sur la fin du pool : sans enfants, l'OVNI est filtré.
+    const c = child();
+    c.satiety = 100;
+    c.children = [];
+    c.nextEventAtActive = 0;
+    // rng : 0,99 pour le tirage (dernier du pool filtré) puis constant.
+    const forced: GameConfig = { ...cfg, rng: () => 0.99 };
+    advanceSim(c, wallet(), 30, forced);
+    // Avec rng 0,99 le tirage retombe sur une aubaine (fin du pool), jamais
+    // sur l'OVNI : pas de menace active visant les petits.
+    expect(c.activeEvent?.eventId).not.toBe('ufo-abduction');
+  });
+
+  it("les petits creusent l'appétit du foyer", () => {
+    const solo = child();
+    solo.satiety = 100;
+    solo.nextEventAtActive = Infinity;
+    const famille = child();
+    famille.satiety = 100;
+    famille.nextEventAtActive = Infinity;
+    famille.children = [
+      { seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false },
+      { seed: 2, hue: 200, shape: 1, earStyle: 1, spots: true },
+    ];
+    // 30 min : le foyer chargé draine plus vite, sans taper le plancher de 0.
+    advanceSim(solo, wallet(), HOUR / 2, cfg);
+    advanceSim(famille, wallet(), HOUR / 2, cfg);
+    expect(100 - famille.satiety).toBeCloseTo(
+      100 - solo.satiety + cfg.childMetabolismPerHour,
+      1,
+    );
   });
 
   it('la Défense réduit les pertes', () => {

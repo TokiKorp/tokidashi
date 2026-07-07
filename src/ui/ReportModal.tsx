@@ -26,7 +26,9 @@ function eventLine(e: SimEvent, cfgLookup: (id: string) => string): string | nul
     case 'auto-collected':
       return 'Le Majordome a ramassé le pot 🫙';
     case 'event-lost':
-      return 'Un pillard a frappé pendant ton absence 😿';
+      return e.data?.eventId === 'ufo-abduction'
+        ? 'Un OVNI a enlevé un petit pendant ton absence 🛸'
+        : 'Un pillard a frappé pendant ton absence 😿';
     case 'event-defended':
       return 'Il a repoussé une menace 🛡️';
     case 'event-boon':

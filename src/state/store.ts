@@ -146,7 +146,9 @@ function eventNotice(cfg: GameConfig, events: SimEvent[]): string | null {
           ? `🛡️ Menace repoussée toute seule (${def?.label ?? '?'}) !`
           : `🎉 ${def?.label ?? 'Menace'} chassé !`;
       case 'event-lost':
-        return `😿 ${def?.label ?? 'Un pillard'} a frappé : −${e.data?.lost ?? '?'}`;
+        return def?.id === 'ufo-abduction'
+          ? '🛸 Un OVNI a enlevé un petit… La famille est sous le choc.'
+          : `😿 ${def?.label ?? 'Un pillard'} a frappé : −${e.data?.lost ?? '?'}`;
       case 'event-boon':
         return def?.id === 'crumb-rain'
           ? `🌧️ Pluie de miettes : +${e.data?.gain} !`

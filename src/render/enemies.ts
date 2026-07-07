@@ -10,6 +10,8 @@ export const ENEMY_PALETTE: Record<string, string> = {
   D: '#7a3b2e', // fourmis
   O: '#e8933a', // becs et pattes
   w: '#ffffff',
+  S: '#c8ccd8', // coque de soucoupe
+  L: '#9fe8ff', // dôme et rayon tracteur
 };
 
 interface EnemySprite {
@@ -123,10 +125,46 @@ const PIGEON: EnemySprite = {
   ],
 };
 
+/** OVNI kidnappeur — hublots qui clignotent, rayon tracteur intermittent. */
+const UFO: EnemySprite = {
+  frameMs: 240,
+  frames: [
+    [
+      '............',
+      '....LLLL....',
+      '...LLLLLL...',
+      '..oooooooo..',
+      '.oSSSSSSSSo.',
+      'oSwSSwSSwSSo',
+      '.oSSSSSSSSo.',
+      '..oooooooo..',
+      '............',
+      '............',
+      '............',
+      '............',
+    ],
+    [
+      '............',
+      '....LLLL....',
+      '...LLLLLL...',
+      '..oooooooo..',
+      '.oSSSSSSSSo.',
+      'oSSwSSwSSwSo',
+      '.oSSSSSSSSo.',
+      '..oooooooo..',
+      '....LLLL....',
+      '....LLLL....',
+      '.....LL.....',
+      '............',
+    ],
+  ],
+};
+
 export const ENEMY_SPRITES: Record<string, EnemySprite> = {
   'crumb-thief': CROW,
   'ant-invasion': ANTS,
   'greedy-pigeon': PIGEON,
+  'ufo-abduction': UFO,
 };
 
 /** Trajectoire de l'ennemi dans la scène (px, origine = position de base). */
@@ -141,6 +179,8 @@ export function enemyMotion(
       return { x: 150 + Math.sin(t / 900) * 70, y: 190 };
     case 'greedy-pigeon': // sautille en picorant
       return { x: 185 + Math.sin(t / 700) * 25, y: 192 - Math.abs(Math.sin(t / 260)) * 6 };
+    case 'ufo-abduction': // plane haut, balaie la scène à la recherche d'un petit
+      return { x: 132 + Math.sin(t / 550) * 60, y: 62 + Math.sin(t / 320) * 5 };
     default:
       return { x: 200, y: 120 };
   }

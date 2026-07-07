@@ -57,6 +57,13 @@ export interface GameConfig {
   /** Événements aléatoires (menaces + aubaines). */
   eventMinIntervalSeconds: number;
   eventMaxIntervalSeconds: number;
+  /** Plancher absolu entre deux événements, même pot débordant. */
+  eventIntervalFloorSeconds: number;
+  /**
+   * L'appât du butin : l'intervalle est divisé par (1 + pot/diviseur).
+   * Plus les Miettes s'entassent, plus les pillards rappliquent.
+   */
+  crumbLureDivisor: number;
   eventWindowSeconds: number;
   /** Part du pot volée par le corbeau (avant Défense). */
   thiefStealRatio: number;
@@ -69,6 +76,8 @@ export interface GameConfig {
   childBaseCost: number;
   maxChildren: number;
   childProductionPerHour: number;
+  /** Chaque petit creuse l'appétit du foyer (Satiété/h en plus). */
+  childMetabolismPerHour: number;
 
   devCapacityBudget: number;
   simSpeed: number;
@@ -396,6 +405,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'crumb-thief', label: 'Corbeau chapardeur', emoji: '🐦‍⬛', kind: 'threat', weight: 4, threatText: 'Il vise le pot de Miettes !' },
     { id: 'ant-invasion', label: 'Invasion de fourmis', emoji: '🐜', kind: 'threat', weight: 3, threatText: 'Elles marchent sur le portefeuille !' },
     { id: 'greedy-pigeon', label: 'Pigeon glouton', emoji: '🐦', kind: 'threat', weight: 3, threatText: 'Il veut lui voler son goûter !' },
+    { id: 'ufo-abduction', label: 'OVNI kidnappeur', emoji: '🛸', kind: 'threat', weight: 3, threatText: 'Il vise un petit !', requiresChildren: true },
     { id: 'crumb-rain', label: 'Pluie de miettes', emoji: '🌧️', kind: 'boon', weight: 2 },
     { id: 'butterfly', label: 'Papillon ami', emoji: '🦋', kind: 'boon', weight: 2 },
   ],
@@ -434,6 +444,8 @@ export const DEFAULT_CONFIG: GameConfig = {
 
   eventMinIntervalSeconds: 12 * 60,
   eventMaxIntervalSeconds: 35 * 60,
+  eventIntervalFloorSeconds: 90,
+  crumbLureDivisor: 150,
   eventWindowSeconds: 20,
   thiefStealRatio: 0.4,
   antStealRatio: 0.15,
@@ -442,6 +454,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   childBaseCost: 500,
   maxChildren: 4,
   childProductionPerHour: 15,
+  childMetabolismPerHour: 10,
 
   devCapacityBudget: 1_000_000,
   simSpeed: 1,

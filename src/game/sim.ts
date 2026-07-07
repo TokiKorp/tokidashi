@@ -151,7 +151,11 @@ function stepSim(
   const wasHungry = c.satiety < cfg.hungryThreshold;
 
   // 1. Faim — le métabolisme draine la Satiété (réductible par Efficacité).
-  c.satiety = clamp(c.satiety - ((stage.metabolismPerHour * mods.metabolism) / HOUR) * s);
+  //    Chaque petit adopté creuse l'appétit du foyer : il faut plus les nourrir.
+  const householdMetabolism =
+    (stage.metabolismPerHour + c.children.length * cfg.childMetabolismPerHour) *
+    mods.metabolism;
+  c.satiety = clamp(c.satiety - (householdMetabolism / HOUR) * s);
   if (!wasHungry && c.satiety < cfg.hungryThreshold) {
     events.push({ type: 'got-hungry' });
   }
@@ -268,7 +272,11 @@ function rng(cfg: GameConfig): number {
 
 export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
   const span = cfg.eventMaxIntervalSeconds - cfg.eventMinIntervalSeconds;
-  c.nextEventAtActive = c.activeSeconds + cfg.eventMinIntervalSeconds + rng(cfg) * span;
+  const base = cfg.eventMinIntervalSeconds + rng(cfg) * span;
+  // L'appât du butin : un pot qui déborde attire les pillards bien plus vite.
+  const lure = 1 + c.pendingCrumbs / cfg.crumbLureDivisor;
+  c.nextEventAtActive =
+    c.activeSeconds + Math.max(cfg.eventIntervalFloorSeconds, base / lure);
 }
 
 function stepEvents(
@@ -288,11 +296,14 @@ function stepEvents(
   }
   if (c.activeSeconds < c.nextEventAtActive) return;
 
-  // Tirage pondéré.
-  const pool = cfg.events;
-  const total = pool.reduce((sum, e) => sum + e.weight, 0);
+  // Tirage pondéré. L'OVNI ne rôde que s'il y a des petits à enlever, et le
+  // corbeau est d'autant plus attiré que le pot déborde.
+  const pool = cfg.events.filter((e) => !e.requiresChildren || c.children.length > 0);
+  const weightOf = (e: (typeof pool)[number]): number =>
+    e.id === 'crumb-thief' ? e.weight * (1 + c.pendingCrumbs / 200) : e.weight;
+  const total = pool.reduce((sum, e) => sum + weightOf(e), 0);
   let roll = rng(cfg) * total;
-  const def = pool.find((e) => (roll -= e.weight) <= 0) ?? pool[0];
+  const def = pool.find((e) => (roll -= weightOf(e)) <= 0) ?? pool[0];
 
   if (def.kind === 'boon') {
     applyBoon(c, cfg, def.id, events);
@@ -352,6 +363,13 @@ function applyThreatLoss(
   } else if (eventId === 'greedy-pigeon') {
     lost = Math.round(cfg.pigeonSatietyBite * mods.theftLoss);
     c.satiety = clamp(c.satiety - lost);
+  } else if (eventId === 'ufo-abduction') {
+    // L'OVNI enlève le dernier petit adopté. Traumatisant.
+    if (c.children.length > 0) {
+      c.children.pop();
+      lost = 1;
+      c.mood = clamp(c.mood - 10); // en plus du −5 commun
+    }
   }
   c.mood = clamp(c.mood - 5);
   events.push({ type: 'event-lost', data: { eventId, lost } });
