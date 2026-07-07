@@ -1,0 +1,429 @@
+// Tests du cœur de simulation : l'ordre de dégradation (GDD §4.1), l'économie
+// de la bascule (GDD §5.1) et le nourrissage. Tout est en temps ACTIF simulé.
+
+import { describe, expect, it } from 'vitest';
+import {
+  collectCrumbs,
+  createCompanion,
+  feed,
+  play,
+  startLearning,
+  startUpgrade,
+  tapEgg,
+} from './actions';
+import { DEFAULT_CONFIG, foodById, skillById, type GameConfig } from './config';
+import { growthFactor } from './genome';
+import { advanceSim, crumbCap, levelScale, upgradeCost, visibleState } from './sim';
+import type { CapacityGauge, CompanionState, WalletState } from './types';
+
+const cfg: GameConfig = DEFAULT_CONFIG;
+const HOUR = 3600;
+
+function hatchedBlob(): CompanionState {
+  const c = createCompanion('Testi');
+  for (let i = 0; i < cfg.eggTapsToHatch; i++) tapEgg(c, cfg);
+  return c;
+}
+
+function child(): CompanionState {
+  const c = hatchedBlob();
+  c.stage = 'child';
+  c.xp = 250;
+  return c;
+}
+
+function wallet(crumbs = 0): WalletState {
+  return { crumbs };
+}
+
+function capacity(budget = 1_000_000): CapacityGauge {
+  return { budget, used: 0 };
+}
+
+describe('œuf', () => {
+  it('éclot après le bon nombre de tapotements', () => {
+    const c = createCompanion('Testi');
+    for (let i = 0; i < cfg.eggTapsToHatch - 1; i++) tapEgg(c, cfg);
+    expect(c.stage).toBe('egg');
+    tapEgg(c, cfg);
+    expect(c.stage).toBe('blob');
+  });
+
+  it("éclot tout seul après le temps d'incubation", () => {
+    const c = createCompanion('Testi');
+    const events = advanceSim(c, wallet(), cfg.eggHatchSeconds + 60, cfg);
+    expect(c.stage).toBe('blob');
+    expect(events.some((e) => e.type === 'hatched')).toBe(true);
+  });
+
+  it('ne consomme rien (métabolisme nul)', () => {
+    const c = createCompanion('Testi');
+    const satiety = c.satiety;
+    advanceSim(c, wallet(), cfg.eggHatchSeconds / 2, cfg);
+    expect(c.satiety).toBe(satiety);
+  });
+});
+
+describe('métabolisme et dégradation (Faim → Humeur → Vitalité → Maladie → Mort)', () => {
+  it('draine la Satiété au rythme du stade', () => {
+    const c = hatchedBlob();
+    c.satiety = 80;
+    advanceSim(c, wallet(), HOUR, cfg);
+    expect(c.satiety).toBeCloseTo(80 - cfg.stages.blob.metabolismPerHour, 1);
+  });
+
+  it("signale la faim au franchissement du seuil, l'humeur suit", () => {
+    const c = hatchedBlob();
+    c.satiety = 26;
+    c.mood = 60;
+    const events = advanceSim(c, wallet(), HOUR, cfg);
+    expect(events.some((e) => e.type === 'got-hungry')).toBe(true);
+    expect(c.mood).toBeLessThan(60);
+    expect(visibleState(c, cfg)).toBe('hungry');
+  });
+
+  it('la Vitalité ne baisse que Satiété à zéro, puis maladie, puis mort', () => {
+    const c = hatchedBlob();
+    c.satiety = 0;
+    c.vitality = 100;
+    const events = advanceSim(c, wallet(), 2 * HOUR, cfg);
+    expect(c.vitality).toBeLessThan(30);
+    expect(c.sick).toBe(true);
+    expect(events.some((e) => e.type === 'got-sick')).toBe(true);
+    expect(c.dead).toBe(false);
+
+    // Vitalité 0 prolongée → mort (permadeath).
+    const more = advanceSim(c, wallet(), 3 * HOUR, cfg);
+    expect(c.dead).toBe(true);
+    expect(more.some((e) => e.type === 'died')).toBe(true);
+  });
+
+  it("récupère de la Vitalité tant qu'il est bien nourri", () => {
+    const c = hatchedBlob();
+    c.satiety = 90;
+    c.vitality = 31; // presque malade mais bien nourri
+    const events = advanceSim(c, wallet(), HOUR, cfg);
+    expect(c.vitality).toBeGreaterThan(31);
+    expect(events.some((e) => e.type === 'got-sick')).toBe(false);
+  });
+
+  it('la mort est un état terminal : la sim ne bouge plus', () => {
+    const c = hatchedBlob();
+    c.dead = true;
+    const snapshot = { ...c };
+    advanceSim(c, wallet(), HOUR, cfg);
+    expect(c.satiety).toBe(snapshot.satiety);
+  });
+});
+
+describe('nourrissage et paiement', () => {
+  it('paie en Miettes et restaure la Satiété', () => {
+    const c = hatchedBlob();
+    c.satiety = 40;
+    const w = wallet(20);
+    const res = feed(c, w, capacity(), foodById(cfg, 'kibble')!, cfg);
+    expect(res.ok).toBe(true);
+    expect(w.crumbs).toBe(5);
+    expect(c.satiety).toBe(70);
+  });
+
+  it('refuse sans le sou, sans effet de bord', () => {
+    const c = hatchedBlob();
+    c.satiety = 40;
+    const w = wallet(3);
+    const res = feed(c, w, capacity(), foodById(cfg, 'kibble')!, cfg);
+    expect(res.ok).toBe(false);
+    expect(w.crumbs).toBe(3);
+    expect(c.satiety).toBe(40);
+  });
+
+  it('les repas TOKEN consomment la capacité et font grossir (tokensEaten)', () => {
+    const c = hatchedBlob();
+    c.satiety = 10;
+    const feast = foodById(cfg, 'premium-feast')!;
+    const cap = capacity();
+    const res = feed(c, wallet(), cap, feast, cfg);
+    expect(res.ok).toBe(true);
+    expect(cap.used).toBe(feast.cost);
+    expect(c.tokensEaten).toBe(feast.cost);
+    expect(c.satiety).toBe(100);
+  });
+
+  it('refuse quand la capacité est épuisée (jamais de dépense cachée)', () => {
+    const c = hatchedBlob();
+    const feast = foodById(cfg, 'premium-feast')!;
+    const cap: CapacityGauge = { budget: feast.cost, used: 1 };
+    const res = feed(c, wallet(), cap, feast, cfg);
+    expect(res.ok).toBe(false);
+    expect(cap.used).toBe(1);
+  });
+
+  it('capacité illimitée (mode DEV) : nourrit sans jamais refuser', () => {
+    const c = hatchedBlob();
+    const feast = foodById(cfg, 'premium-feast')!;
+    const cap: CapacityGauge = { budget: 0, used: 0, unlimited: true };
+    const res = feed(c, wallet(), cap, feast, cfg);
+    expect(res.ok).toBe(true);
+    expect(c.tokensEaten).toBe(feast.cost);
+  });
+
+  it("un œuf ne mange pas", () => {
+    const c = createCompanion('Testi');
+    const res = feed(c, wallet(100), capacity(), foodById(cfg, 'kibble')!, cfg);
+    expect(res.ok).toBe(false);
+  });
+
+  it('les prix chauffent au spam puis redescendent avec le temps actif', () => {
+    const c = hatchedBlob();
+    const kibble = foodById(cfg, 'kibble')!;
+    const w = wallet(10_000);
+    const cap = capacity();
+
+    // Spam : chaque achat renchérit le suivant.
+    feed(c, w, cap, kibble, cfg); // 15
+    const after1 = 10_000 - w.crumbs;
+    feed(c, w, cap, kibble, cfg); // ceil(15 × 1,6) = 24
+    const after2 = 10_000 - w.crumbs - after1;
+    expect(after1).toBe(kibble.cost);
+    expect(after2).toBeGreaterThan(after1);
+
+    // Le temps actif fait retomber la chauffe → prix de base retrouvé.
+    c.satiety = 100;
+    advanceSim(c, w, 2 * HOUR, cfg);
+    expect(c.foodHeat[kibble.id] ?? 0).toBeLessThan(0.05);
+  });
+});
+
+describe('compétences : la bascule vers l\'autosuffisance', () => {
+  it('un blob ne peut pas apprendre (pas de slot)', () => {
+    const c = hatchedBlob();
+    const res = startLearning(c, wallet(500), capacity(), 'crumb-forage', cfg);
+    expect(res.ok).toBe(false);
+  });
+
+  it("apprend après le temps d'étude, puis produit des Miettes plafonnées", () => {
+    const c = child();
+    const w = wallet();
+    const cap = capacity();
+    const res = startLearning(c, w, cap, 'crumb-forage', cfg);
+    expect(res.ok).toBe(true);
+    expect(cap.used).toBe(skillById(cfg, 'crumb-forage')!.cost);
+
+    // Pendant l'étude : état "working", pas encore de production.
+    expect(visibleState(c, cfg)).toBe('working');
+    let events = advanceSim(c, w, cfg.skills[0].trainSeconds + 60, cfg);
+    expect(events.some((e) => e.type === 'skill-learned')).toBe(true);
+
+    // Production modulée par l'humeur, plafonnée à N heures (GDD §7).
+    // Métabolisme neutralisé pour isoler la production sur la longue durée.
+    const noHunger: GameConfig = {
+      ...cfg,
+      stages: { ...cfg.stages, child: { ...cfg.stages.child, metabolismPerHour: 0 } },
+    };
+    const forageRate = skillById(cfg, 'crumb-forage')!.crumbsPerHour!;
+    c.mood = 50; // multiplicateur ×1
+    c.satiety = 100;
+    const before = c.pendingCrumbs;
+    advanceSim(c, w, HOUR, noHunger);
+    expect(c.pendingCrumbs - before).toBeCloseTo(forageRate, 0);
+
+    events = advanceSim(c, w, 100 * HOUR, noHunger);
+    expect(c.pendingCrumbs).toBeLessThanOrEqual(crumbCap(c, noHunger));
+    expect(events.some((e) => e.type === 'crumb-cap-reached')).toBe(true);
+  });
+
+  it("l'humeur module le rendement (×0,5 grognon, ×1,3 heureux)", () => {
+    const grognon = child();
+    grognon.skills = [{ skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    grognon.satiety = 100;
+    grognon.mood = 10;
+    advanceSim(grognon, wallet(), HOUR, cfg);
+
+    const heureux = child();
+    heureux.skills = [{ skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    heureux.satiety = 100;
+    heureux.mood = 90;
+    advanceSim(heureux, wallet(), HOUR, cfg);
+
+    const rate = skillById(cfg, 'crumb-forage')!.crumbsPerHour!;
+    expect(grognon.pendingCrumbs).toBeCloseTo(rate * 0.5, 0);
+    expect(heureux.pendingCrumbs).toBeCloseTo(rate * 1.3, 0);
+  });
+
+  it("s'auto-nourrit avec ses Miettes quand il a faim (jamais avec les TOKEN)", () => {
+    const c = child();
+    c.skills = [
+      { skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+      { skillId: 'auto-feeder', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+    ];
+    c.satiety = 29;
+    c.pendingCrumbs = 100;
+    const w = wallet(0);
+    const events = advanceSim(c, w, 60, cfg);
+    expect(events.some((e) => e.type === 'auto-fed')).toBe(true);
+    expect(c.satiety).toBeGreaterThan(29);
+  });
+
+  it('régime permanent : la branche Production complète rend autosuffisant', () => {
+    // La promesse morale du jeu (GDD §12) : la voie gratuite est viable.
+    // Avec la chauffe des prix, l'autonomie totale demande les DEUX
+    // compétences de production — c'est le haut de la branche.
+    const c = child();
+    c.skills = [
+      { skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+      { skillId: 'bakery', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+      { skillId: 'auto-feeder', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+    ];
+    c.satiety = 80;
+    c.mood = 80;
+    const w = wallet(50);
+    advanceSim(c, w, 8 * HOUR, cfg);
+    expect(c.dead).toBe(false);
+    expect(c.vitality).toBeGreaterThan(0);
+  });
+
+  it("l'arbre impose ses prérequis : pas de Boulangerie sans Ramasse-miettes", () => {
+    const c = child();
+    const res = startLearning(c, wallet(1000), capacity(), 'bakery', cfg);
+    expect(res.ok).toBe(false);
+
+    c.skills = [{ skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const res2 = startLearning(c, wallet(1000), capacity(), 'bakery', cfg);
+    expect(res2.ok).toBe(true);
+  });
+
+  it('monte de niveau : coût croissant, ré-étude, effet amplifié', () => {
+    const forage = skillById(cfg, 'crumb-forage')!;
+    const c = child();
+    c.skills = [{ skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const w = wallet();
+    const cap = capacity();
+
+    const res = startUpgrade(c, w, cap, 'crumb-forage', cfg);
+    expect(res.ok).toBe(true);
+    expect(cap.used).toBe(upgradeCost(cfg, forage.cost, 2)); // 5 000 × 1,8 = 9 000
+    expect(visibleState(c, cfg)).toBe('working');
+
+    // L'étude d'amélioration prend le même temps ; le niveau 1 produit pendant.
+    const noHunger: GameConfig = {
+      ...cfg,
+      stages: { ...cfg.stages, child: { ...cfg.stages.child, metabolismPerHour: 0 } },
+    };
+    c.satiety = 100;
+    const events = advanceSim(c, w, forage.trainSeconds + 60, noHunger);
+    expect(events.some((e) => e.type === 'skill-upgraded')).toBe(true);
+    expect(c.skills[0].level).toBe(2);
+
+    // Effet niveau 2 : production ×1,5 à humeur neutre.
+    c.mood = 50;
+    c.pendingCrumbs = 0;
+    advanceSim(c, w, HOUR, noHunger);
+    expect(c.pendingCrumbs).toBeCloseTo(forage.crumbsPerHour! * levelScale(cfg, 2), 0);
+  });
+
+  it('niveau max respecté et une seule étude à la fois', () => {
+    const c = child();
+    c.skills = [
+      { skillId: 'crumb-forage', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+      { skillId: 'auto-feeder', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+    ];
+    // Garde-manger : maxLevel 1 → pas d'amélioration.
+    expect(startUpgrade(c, wallet(99_999), capacity(), 'auto-feeder', cfg).ok).toBe(false);
+    // Une amélioration se lance…
+    expect(startUpgrade(c, wallet(99_999), capacity(), 'crumb-forage', cfg).ok).toBe(true);
+    // …mais une seule étude à la fois.
+    expect(startUpgrade(c, wallet(99_999), capacity(), 'crumb-forage', cfg).ok).toBe(false);
+  });
+
+  it('le Blob peut apprendre les racines de son stade (1 slot)', () => {
+    const c = hatchedBlob();
+    const res = startLearning(c, wallet(500), capacity(), 'hug-expert', cfg);
+    expect(res.ok).toBe(true);
+    // …mais une seule : le slot est occupé.
+    const res2 = startLearning(c, wallet(500), capacity(), 'lean-stomach', cfg);
+    expect(res2.ok).toBe(false);
+  });
+
+  it("les compétences d'Efficacité et de Conversion mordent vraiment", () => {
+    // Estomac économe : −25 % de métabolisme.
+    const eco = child();
+    eco.skills = [{ skillId: 'lean-stomach', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    eco.satiety = 100;
+    const temoin = child();
+    temoin.satiety = 100;
+    advanceSim(eco, wallet(), HOUR, cfg);
+    advanceSim(temoin, wallet(), HOUR, cfg);
+    expect(100 - eco.satiety).toBeCloseTo((100 - temoin.satiety) * 0.75, 1);
+
+    // Fin gourmet : croquette 20 % moins chère.
+    const gourmet = child();
+    gourmet.skills = [{ skillId: 'gourmet', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    gourmet.satiety = 10;
+    const w = wallet(12);
+    const res = feed(gourmet, w, capacity(), foodById(cfg, 'kibble')!, cfg);
+    expect(res.ok).toBe(true);
+    expect(w.crumbs).toBe(0); // 15 × 0,8 = 12
+
+    // Papilles dorées : la ration d'urgence nourrit 50 % de plus.
+    const palate = child();
+    palate.skills = [{ skillId: 'golden-palate', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    palate.satiety = 0;
+    feed(palate, wallet(), capacity(), foodById(cfg, 'emergency-ration')!, cfg);
+    expect(palate.satiety).toBe(75);
+  });
+});
+
+describe('interactions et progression', () => {
+  it("jouer monte l'humeur puis impose un cooldown", () => {
+    const c = hatchedBlob();
+    c.mood = 50;
+    expect(play(c, cfg).ok).toBe(true);
+    expect(c.mood).toBe(50 + cfg.playMoodGain);
+    expect(play(c, cfg).ok).toBe(false); // cooldown
+  });
+
+  it('ramasser transfère le pot vers le portefeuille', () => {
+    const c = child();
+    c.pendingCrumbs = 42;
+    const w = wallet(8);
+    expect(collectCrumbs(c, w).ok).toBe(true);
+    expect(w.crumbs).toBe(50);
+    expect(c.pendingCrumbs).toBe(0);
+  });
+
+  it('évolue Blob → Enfant au seuil d\'XP', () => {
+    const c = hatchedBlob();
+    c.xp = cfg.stages.blob.xpToNext! - 1;
+    c.satiety = 100;
+    const events = advanceSim(c, wallet(), HOUR, cfg);
+    expect(c.stage).toBe('child');
+    expect(events.some((e) => e.type === 'evolved')).toBe(true);
+  });
+
+  it('le génome est généré procéduralement et varie', () => {
+    const seq = (vals: number[]) => {
+      let i = 0;
+      return () => vals[i++ % vals.length];
+    };
+    const a = createCompanion('A', seq([0.1, 0.2, 0.3, 0.4, 0.5]));
+    const b = createCompanion('B', seq([0.9, 0.8, 0.7, 0.6, 0.5]));
+    expect(a.genome).toBeDefined();
+    expect(a.genome.hue).not.toBe(b.genome.hue);
+    expect(a.genome.shape).not.toBe(b.genome.shape);
+  });
+
+  it('la croissance suit les paliers 100 / 10k / 1M', () => {
+    expect(growthFactor(0)).toBe(0);
+    expect(growthFactor(100)).toBeCloseTo(1 / 3, 1);
+    expect(growthFactor(10_000)).toBeCloseTo(2 / 3, 1);
+    expect(growthFactor(1_000_000)).toBe(1);
+  });
+
+  it('le simSpeed accélère le temps (panneau dev)', () => {
+    const fast: GameConfig = { ...cfg, simSpeed: 60 };
+    const c = hatchedBlob();
+    c.satiety = 80;
+    advanceSim(c, wallet(), 60, fast); // 1 min réelle = 1 h simulée
+    expect(c.satiety).toBeCloseTo(80 - cfg.stages.blob.metabolismPerHour, 1);
+  });
+});

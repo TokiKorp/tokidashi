@@ -1,0 +1,676 @@
+/* Tokidachi — pixel-cute (GDD §9) : palette douce, lisible d'un coup d'œil. */
+
+:root {
+  --bg: #fdf3e3;
+  --bg-panel: #fffaf0;
+  --ink: #3f4a5a;
+  --ink-soft: #7a8494;
+  --mint: #a8e6cf;
+  --mint-dark: #6fc7a8;
+  --pink: #ff9aa2;
+  --gold: #f7c873;
+  --sky: #8ecae6;
+  --danger: #e07a5f;
+  --border: 3px solid var(--ink);
+  --shadow: 4px 4px 0 rgba(63, 74, 90, 0.25);
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Overlay de bureau (GDD §9-10) : le fond de la fenêtre est TRANSPARENT —
+   seuls le Compagnon et le HUD flottent sur le bureau. Le !important durcit
+   la transparence contre tout style résiduel (webview macOS capricieuse). */
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent !important;
+}
+
+body {
+  user-select: none;
+  overflow: hidden;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px;
+  gap: 6px;
+}
+
+/* ——— HUD flottant ——— */
+.hud {
+  background: rgba(255, 250, 240, 0.96);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drag-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+}
+
+.drag-grip {
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.drag-title {
+  flex: 1;
+  font-weight: bold;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drag-title small {
+  color: var(--ink-soft);
+  font-weight: normal;
+}
+
+.wallet {
+  font-weight: bold;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn-close,
+.btn-toggle {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 2px 4px;
+}
+
+.btn-close:hover {
+  color: var(--danger);
+}
+
+.btn-toggle:hover {
+  color: var(--ink);
+}
+
+/* ——— Minibar (contrôles masqués : discret, opaque au survol) ——— */
+.minibar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: center;
+  background: rgba(255, 250, 240, 0.55);
+  border: 2px solid rgba(63, 74, 90, 0.45);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  transition: opacity 0.2s, background 0.2s;
+  opacity: 0.55;
+  cursor: grab;
+}
+
+.minibar:hover {
+  opacity: 1;
+  background: rgba(255, 250, 240, 0.95);
+}
+
+.minibar-stats {
+  white-space: nowrap;
+}
+
+/* ——— Scène (transparente : le pet flotte sur le bureau) ——— */
+.stage-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0 2px;
+}
+
+.pet-stage {
+  image-rendering: pixelated;
+  cursor: default;
+}
+
+.pet-stage[role='button'] {
+  cursor: pointer;
+}
+
+.bubble {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 85%;
+  background: #fff;
+  border: var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  animation: pop 0.15s ease-out;
+}
+
+.bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+
+@keyframes pop {
+  from {
+    transform: translateX(-50%) scale(0.7);
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+.frozen-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(142, 202, 230, 0.55);
+  border-radius: 9px;
+  font-weight: bold;
+}
+
+.egg-hint {
+  color: var(--ink);
+  font-size: 12px;
+  background: rgba(255, 250, 240, 0.92);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 3px 12px;
+  margin-bottom: 4px;
+}
+
+/* ——— Jauges ——— */
+.gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gauge {
+  display: grid;
+  grid-template-columns: 64px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.gauge-track {
+  height: 12px;
+  background: #e8dcc8;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  transition: width 0.4s;
+}
+
+.gauge-satiety .gauge-fill {
+  background: var(--gold);
+}
+
+.gauge-vitality .gauge-fill {
+  background: var(--pink);
+}
+
+.gauge-mood .gauge-fill {
+  background: var(--mint-dark);
+}
+
+.gauge-low .gauge-label {
+  color: var(--danger);
+  font-weight: bold;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.gauge-value {
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+/* ——— Statut / pot ——— */
+.status-line {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.jar {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 2px dashed var(--ink-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.jar:disabled {
+  cursor: default;
+  color: var(--ink-soft);
+}
+
+/* ——— Actions ——— */
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+button {
+  font-family: inherit;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-ghost {
+  font-size: 13px;
+  padding: 8px 10px;
+  border: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  background: var(--mint);
+  color: var(--ink);
+}
+
+.btn-primary {
+  flex: 1;
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: var(--bg-panel);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-ghost {
+  background: var(--bg-panel);
+  flex: 0;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ——— Panneaux ——— */
+.panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(63, 74, 90, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.panel {
+  width: min(92vw, 320px);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel h2 {
+  font-size: 16px;
+}
+
+.panel h3 {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.panel section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.panel-hint.muted {
+  font-size: 11px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+}
+
+/* ——— Nourriture ——— */
+.food-list,
+.skill-list,
+.report-list,
+.memorial ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.food-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  grid-template-areas:
+    'emoji name cost'
+    'emoji effect cost';
+  align-items: center;
+  gap: 0 8px;
+  text-align: left;
+  padding: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.food-emoji {
+  grid-area: emoji;
+  font-size: 20px;
+}
+
+.food-name {
+  grid-area: name;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.food-effect {
+  grid-area: effect;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.food-cost {
+  grid-area: cost;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.cost-token {
+  color: #b8860b;
+}
+
+.cost-crumbs {
+  color: var(--mint-dark);
+}
+
+.cost-surged {
+  color: var(--danger);
+}
+
+/* ——— Compétences ——— */
+.skill-item {
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skill-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.skill-cost {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.skill-desc {
+  font-size: 12px;
+}
+
+.skill-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+.skill-badge.owned {
+  background: var(--mint);
+}
+
+.skill-badge.learning {
+  background: var(--sky);
+}
+
+.skill-locked {
+  opacity: 0.65;
+}
+
+.skill-branch {
+  color: var(--ink-soft);
+}
+
+.skill-stage {
+  font-size: 10px;
+  font-weight: normal;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--ink-soft);
+  color: var(--ink);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.skill-stage.stage-locked {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.skill-badge.lock {
+  background: #eee4d0;
+  color: var(--ink-soft);
+}
+
+.skill-owned-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-upgrade {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.skill-cat {
+  font-size: 10px;
+  font-weight: normal;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eee4d0;
+  color: var(--ink-soft);
+  vertical-align: middle;
+}
+
+.cat-production {
+  background: var(--mint);
+  color: var(--ink);
+}
+
+.cat-automation {
+  background: var(--sky);
+  color: var(--ink);
+}
+
+.cat-efficiency {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.cat-conversion {
+  background: #e8c8f0;
+  color: var(--ink);
+}
+
+.cat-social {
+  background: var(--pink);
+  color: var(--ink);
+}
+
+/* ——— Écrans pleine page (cartes flottantes sur fond transparent) ——— */
+.screen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.screen-card {
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.screen-card .drag-bar {
+  align-self: stretch;
+}
+
+.screen h1 {
+  font-size: 26px;
+}
+
+.screen p {
+  font-size: 13px;
+  max-width: 300px;
+}
+
+.name-form {
+  display: flex;
+  gap: 6px;
+}
+
+.name-form input {
+  font: inherit;
+  padding: 8px;
+  border: var(--border);
+  border-radius: 10px;
+  background: #fff;
+  width: 160px;
+}
+
+.memorial {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.memorial h3 {
+  margin-bottom: 6px;
+}
+
+/* ——— Divers ——— */
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.badge-dev {
+  background: var(--gold);
+  padding: 0 6px;
+  border-radius: 6px;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.toast {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  z-index: 20;
+  animation: pop 0.15s ease-out;
+}
+
+.report li {
+  font-size: 13px;
+}
