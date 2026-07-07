@@ -144,10 +144,10 @@ fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
         _ => {
             return CliRunResult {
                 response: String::new(),
-                cli_used: cli_name,
                 tokens_consumed: 0,
                 success: false,
                 error: Some(format!("Unknown CLI: {}", cli_name)),
+                cli_used: cli_name,
             };
         }
     }

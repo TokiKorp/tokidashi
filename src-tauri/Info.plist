@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- App d'accessoire : pas d'icône Dock, elle vit dans le tray.
+       (tauri-build fusionne ce fichier dans l'Info.plist final — le champ
+       bundle.macOS.infoPlist n'existe pas dans le schéma de config v2.) -->
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
