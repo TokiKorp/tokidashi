@@ -47,17 +47,27 @@ function palette(g: Genome): Record<string, string> {
     g: '#a4c98a',
     e: '#fff3da',
     s: `hsl(${g.hue} 55% 70%)`,
+    // Cosmétiques
+    A: '#3a3a46',
+    Y: '#f4c542',
+    C: '#66c7d6',
+    M: '#b06fd8',
+    R: '#e05263',
   };
 }
 
-/** Malade/Mort : palettes fixes, prioritaires sur le génome (lisibilité). */
-function sickPalette(g: Genome): Record<string, string> {
-  return { ...palette(g), b: '#b7d9b0', B: '#d9ecd2', p: '#9cc494' };
+/** Papy : pelage grisonnant, mais toujours sa teinte (GDD §4.3). */
+function grandpaPalette(g: Genome): Record<string, string> {
+  return {
+    ...palette(g),
+    b: `hsl(${g.hue} 18% 80%)`,
+    B: `hsl(${g.hue} 15% 90%)`,
+    p: `hsl(${(g.hue + 45) % 360} 18% 70%)`,
+  };
 }
 
-function deadPalette(g: Genome): Record<string, string> {
-  return { ...palette(g), b: '#c5c9cf', B: '#e2e4e8', p: '#b3b7bd', r: 'transparent' };
-}
+// Malade/Mort : les surcharges de palette (verdâtre / grisé) sont appliquées
+// dans buildSprite — prioritaires sur le génome pour rester lisibles.
 
 /**
  * Corps procédural + ancres du visage. `fat` (0→∞, 1 = 1M TOKEN mangés)
@@ -121,8 +131,9 @@ function buildBody(
   }
 
   // Oreilles — ancrées sur la première rangée pleine du corps pour ne jamais
-  // flotter. L'Enfant en a toujours (l'évolution se voit, GDD §4.3).
-  const ear = stage === 'child' && g.earStyle === 0 ? 1 : g.earStyle;
+  // flotter. À partir du stade Kid il en a toujours (l'évolution se voit).
+  const grown = stage !== 'egg' && stage !== 'blob';
+  const ear = grown && g.earStyle === 0 ? 1 : g.earStyle;
   const earRow = topRow + 1;
   if (ear === 1) {
     for (const side of [-1, 1]) {
@@ -140,6 +151,35 @@ function buildBody(
     rows[earRow - 2][ax] = 'o';
     rows[earRow - 3][ax - 1] = 'p';
     rows[earRow - 3][ax] = 'p';
+  }
+
+  // Marqueurs de stade (GDD §4.3 : l'apparence change nettement) :
+  // Ado = houppette rebelle · Adulte = cravate · Papy = moustache blanche.
+  if (stage === 'teen') {
+    const ax = Math.round(CX);
+    for (const dx of [-2, 0, 2]) {
+      // Chaque épi s'ancre sur une case pleine juste en dessous (earRow est
+      // la première rangée garantie pleine du corps).
+      if (rows[earRow]?.[ax + dx] && rows[earRow][ax + dx] !== '.') {
+        rows[earRow - 1][ax + dx] = 'p';
+      }
+    }
+    if (rows[earRow - 1][ax] === 'p') rows[earRow - 2][ax] = 'p';
+  } else if (stage === 'adult') {
+    for (const dy of [2, 3]) {
+      const y = face.mouthY + dy;
+      if (rows[y]?.[Math.round(CX)] && rows[y][Math.round(CX)] !== '.') {
+        rows[y][Math.round(CX)] = 'o';
+      }
+    }
+  } else if (stage === 'grandpa') {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = Math.round(CX) + dx;
+      if (rows[face.mouthY]?.[x] && rows[face.mouthY][x] !== '.') {
+        rows[face.mouthY][x] = 'w';
+      }
+    }
+    face.mouthY = Math.min(GRID - 3, face.mouthY + 1); // la bouche sous la moustache
   }
 
   return { grid: rows.map((r) => r.join('')), face };
@@ -232,6 +272,87 @@ function facePatches(state: Exclude<VisibleState, 'egg'>, f: FaceAnchors): Patch
   }
 }
 
+// ——— Cosmétiques (GDD §6.3) : patches paramétriques par article ———
+
+const COSMETIC_PATCHES: Record<string, (f: FaceAnchors) => Patch[]> = {
+  beret: (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 2; x++) out.push([f.topRow - 1, x, 'R']);
+    out.push([f.topRow - 2, Math.round(CX), 'R']);
+    return out;
+  },
+  'party-hat': (f) => [
+    [f.topRow - 1, Math.round(CX) - 1, 'M'], [f.topRow - 1, Math.round(CX), 'M'],
+    [f.topRow - 1, Math.round(CX) + 1, 'M'], [f.topRow - 2, Math.round(CX), 'M'],
+    [f.topRow - 3, Math.round(CX), 'Y'],
+  ],
+  'top-hat': (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 4; x <= Math.round(CX) + 4; x++) out.push([f.topRow - 1, x, 'A']);
+    for (let y = f.topRow - 3; y <= f.topRow - 2; y++) {
+      for (let x = Math.round(CX) - 2; x <= Math.round(CX) + 2; x++) out.push([y, x, 'A']);
+    }
+    return out;
+  },
+  bandana: (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.topRow, x, 'C']);
+    out.push([f.topRow + 1, Math.round(CX) + 4, 'C']);
+    return out;
+  },
+  crown: (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.topRow - 1, x, 'Y']);
+    for (const dx of [-3, 0, 3]) out.push([f.topRow - 2, Math.round(CX) + dx, 'Y']);
+    return out;
+  },
+  halo: (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 2; x <= Math.round(CX) + 2; x++) out.push([f.topRow - 4, x, 'Y']);
+    return out;
+  },
+  sunglasses: (f) => {
+    const out: Patch[] = [];
+    for (const ex of [f.elx, f.erx]) {
+      for (let x = ex - 1; x <= ex + 2; x++) out.push([f.eyeY, x, 'A']);
+      out.push([f.eyeY + 1, ex, 'A'], [f.eyeY + 1, ex + 1, 'A']);
+    }
+    out.push([f.eyeY, Math.round(CX) - 1, 'A'], [f.eyeY, Math.round(CX), 'A']);
+    return out;
+  },
+  monocle: (f) => [
+    [f.eyeY - 1, f.erx - 1, 'Y'], [f.eyeY - 1, f.erx + 2, 'Y'],
+    [f.eyeY + 2, f.erx - 1, 'Y'], [f.eyeY + 2, f.erx + 2, 'Y'],
+    [f.eyeY + 3, f.erx + 3, 'Y'],
+  ],
+  flower: (f) => [
+    [f.topRow, f.elx - 2, 'M'], [f.topRow - 1, f.elx - 3, 'M'],
+    [f.topRow - 1, f.elx - 1, 'M'], [f.topRow - 2, f.elx - 2, 'M'],
+    [f.topRow - 1, f.elx - 2, 'Y'],
+  ],
+  bow: (f) => [
+    [f.mouthY + 2, Math.round(CX) - 2, 'R'], [f.mouthY + 3, Math.round(CX) - 2, 'R'],
+    [f.mouthY + 2, Math.round(CX) + 2, 'R'], [f.mouthY + 3, Math.round(CX) + 2, 'R'],
+    [f.mouthY + 2, Math.round(CX), 'A'],
+  ],
+  scarf: (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 4; x <= Math.round(CX) + 4; x++) out.push([f.mouthY + 2, x, 'R']);
+    out.push([f.mouthY + 3, Math.round(CX) + 3, 'R'], [f.mouthY + 4, Math.round(CX) + 3, 'R']);
+    return out;
+  },
+  'gold-chain': (f) => {
+    const out: Patch[] = [];
+    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.mouthY + 2, x, 'Y']);
+    out.push([f.mouthY + 3, Math.round(CX), 'Y']);
+    return out;
+  },
+};
+
+function cosmeticPatches(f: FaceAnchors, cosmetics: string[]): Patch[] {
+  return cosmetics.flatMap((id) => COSMETIC_PATCHES[id]?.(f) ?? []);
+}
+
 // ——— Œuf (teinté par le génome : il annonce la couleur de la créature) ———
 
 const EGG_GRID: Grid = [
@@ -269,10 +390,11 @@ export function buildSpriteGrid(
   stage: StageCode,
   genome: Genome,
   fat = 0,
+  cosmetics: string[] = [],
 ): Grid {
   if (state === 'egg') return EGG_GRID;
   const { grid, face } = buildBody(genome, stage, fat);
-  return applyPatches(grid, facePatches(state, face));
+  return applyPatches(grid, [...facePatches(state, face), ...cosmeticPatches(face, cosmetics)]);
 }
 
 export function buildSprite(
@@ -280,6 +402,7 @@ export function buildSprite(
   stage: StageCode,
   genome: Genome,
   fat = 0,
+  cosmetics: string[] = [],
 ): SpriteFrames {
   if (state === 'egg') {
     const pal = { ...palette(genome), s: `hsl(${genome.hue} 60% 70%)` };
@@ -287,10 +410,16 @@ export function buildSprite(
   }
 
   const { grid, face } = buildBody(genome, stage, fat);
+  const basePal = stage === 'grandpa' ? grandpaPalette(genome) : palette(genome);
   const pal =
-    state === 'sick' ? sickPalette(genome) : state === 'dead' ? deadPalette(genome) : palette(genome);
+    state === 'sick'
+      ? { ...basePal, b: '#b7d9b0', B: '#d9ecd2', p: '#9cc494' }
+      : state === 'dead'
+        ? { ...basePal, b: '#c5c9cf', B: '#e2e4e8', p: '#b3b7bd', r: 'transparent' }
+        : basePal;
 
-  const main = gridToCanvas(applyPatches(grid, facePatches(state, face)), pal);
+  const wear = cosmeticPatches(face, cosmetics);
+  const main = gridToCanvas(applyPatches(grid, [...facePatches(state, face), ...wear]), pal);
 
   const blinkable = state === 'happy' || state === 'neutral';
   const blink = blinkable
@@ -302,6 +431,7 @@ export function buildSprite(
                 ((c >= face.elx && c <= face.elx + 1) || (c >= face.erx && c <= face.erx + 1))),
           ),
           ...eyesClosed(face),
+          ...wear,
         ]),
         pal,
       )

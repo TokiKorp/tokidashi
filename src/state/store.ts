@@ -8,19 +8,22 @@ import { create } from 'zustand';
 import { providerById } from '../ai';
 import type { ReactionContext } from '../ai';
 import {
+  buyChild as buyChildAction,
+  buyCosmetic as buyCosmeticAction,
   collectCrumbs,
   createCompanion,
+  equipCosmetic as equipCosmeticAction,
   feed as feedAction,
   play as playAction,
   startLearning,
   startUpgrade,
   tapEgg as tapEggAction,
 } from '../game/actions';
-import { DEFAULT_CONFIG, foodById, type GameConfig } from '../game/config';
+import { DEFAULT_CONFIG, eventById, foodById, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
 import { moodBucket, reactionTier } from '../game/reactions';
-import { advanceSim } from '../game/sim';
-import type { GameState, SimEvent } from '../game/types';
+import { advanceSim, defendEvent, scheduleNextEvent } from '../game/sim';
+import type { GameState, SimEvent, StageCode } from '../game/types';
 import { clearSave, loadSave, writeSave } from './persist';
 
 export interface ReturnReport {
@@ -64,6 +67,10 @@ interface TokidachiStore {
   collect(): void;
   learn(skillId: string): void;
   upgrade(skillId: string): void;
+  defend(): void;
+  buyCosmetic(id: string): void;
+  toggleCosmetic(id: string): void;
+  buyChild(): void;
   buryAndRestart(name: string): void;
   setLocked(locked: boolean): void;
   markAway(): void;
@@ -90,13 +97,20 @@ function freshGame(cfg: GameConfig): GameState {
   };
 }
 
-/** Rattrape les sauvegardes d'anciennes versions (génome, échelle TOKEN…). */
+/** Rattrape les sauvegardes d'anciennes versions (génome, stades, boutique…). */
 function migrateGame(game: GameState, cfg: GameConfig): GameState {
-  if (game.companion) {
-    game.companion.genome ??= generateGenome();
-    game.companion.tokensEaten ??= 0;
-    game.companion.foodHeat ??= {};
-    for (const sp of game.companion.skills) {
+  const c = game.companion;
+  if (c) {
+    c.genome ??= generateGenome();
+    c.tokensEaten ??= 0;
+    c.foodHeat ??= {};
+    c.cosmetics ??= { owned: [], equipped: [] };
+    c.children ??= [];
+    c.activeEvent ??= null;
+    // Ancien nom de stade (avant les 5 niveaux d'évolution).
+    if ((c.stage as string) === 'child') c.stage = 'kid' as StageCode;
+    if (c.nextEventAtActive === undefined) scheduleNextEvent(c, cfg);
+    for (const sp of c.skills) {
       sp.level ??= sp.state === 'owned' ? 1 : 0;
       sp.upgrading ??= false;
     }
@@ -107,6 +121,32 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
   }
   game.capacity.unlimited ??= true;
   return game;
+}
+
+/** Toast lisible pour les événements marquants du tick. */
+function eventNotice(cfg: GameConfig, events: SimEvent[]): string | null {
+  for (const e of events) {
+    const def = e.data?.eventId ? eventById(cfg, String(e.data.eventId)) : undefined;
+    switch (e.type) {
+      case 'event-started':
+        return `${def?.emoji ?? '⚠️'} ${def?.label ?? 'Menace'} — ${def?.threatText ?? 'clique dessus !'}`;
+      case 'event-defended':
+        return e.data?.auto
+          ? `🛡️ Menace repoussée toute seule (${def?.label ?? '?'}) !`
+          : `🎉 ${def?.label ?? 'Menace'} chassé !`;
+      case 'event-lost':
+        return `😿 ${def?.label ?? 'Un pillard'} a frappé : −${e.data?.lost ?? '?'}`;
+      case 'event-boon':
+        return def?.id === 'crumb-rain'
+          ? `🌧️ Pluie de miettes : +${e.data?.gain} !`
+          : `🦋 ${def?.label ?? 'Un ami'} passe dire bonjour (+humeur)`;
+      case 'auto-collected':
+        return '🫙 Le Majordome a ramassé le pot.';
+      default:
+        break;
+    }
+  }
+  return null;
 }
 
 let baseline: ReportBaseline | null = null;
@@ -156,7 +196,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const next = structuredClone(game);
     const events = advanceSim(next.companion!, next.wallet, dtSeconds, cfg);
     baseline?.events.push(...events);
-    set({ game: next });
+    const notice = eventNotice(cfg, events);
+    set(notice ? { game: next, notice } : { game: next });
 
     if (events.some((e) => e.type === 'died')) {
       baseline = null;
@@ -273,6 +314,56 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       return;
     }
     set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  defend() {
+    const { game, cfg } = get();
+    if (!game.companion?.activeEvent) return;
+    const next = structuredClone(game);
+    const events = defendEvent(next.companion!, cfg);
+    baseline?.events.push(...events);
+    const notice = eventNotice(cfg, events);
+    set(notice ? { game: next, notice } : { game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  buyCosmetic(id) {
+    const { game, cfg } = get();
+    if (!game.companion) return;
+    const next = structuredClone(game);
+    const res = buyCosmeticAction(next.companion!, next.wallet, next.capacity, id, cfg);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  toggleCosmetic(id) {
+    const { game, cfg } = get();
+    if (!game.companion) return;
+    const next = structuredClone(game);
+    const res = equipCosmeticAction(next.companion!, id, cfg);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  buyChild() {
+    const { game, cfg } = get();
+    if (!game.companion) return;
+    const next = structuredClone(game);
+    const res = buyChildAction(next.companion!, next.wallet, next.capacity, cfg);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next, notice: '🥚 Un petit rejoint la famille !' });
     void writeSave(makeSave(get()));
   },
 

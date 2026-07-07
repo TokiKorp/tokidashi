@@ -23,6 +23,14 @@ function eventLine(e: SimEvent, cfgLookup: (id: string) => string): string | nul
       return 'Son pot de Miettes est plein — pense à le ramasser';
     case 'auto-fed':
       return "Il s'est nourri tout seul 🥣";
+    case 'auto-collected':
+      return 'Le Majordome a ramassé le pot 🫙';
+    case 'event-lost':
+      return 'Un pillard a frappé pendant ton absence 😿';
+    case 'event-defended':
+      return 'Il a repoussé une menace 🛡️';
+    case 'event-boon':
+      return 'Une bonne surprise est passée par là ✨';
     default:
       return null;
   }

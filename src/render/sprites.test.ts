@@ -29,7 +29,7 @@ function allGenomes(): Genome[] {
 describe('sprite procédural', () => {
   it('produit une grille carrée complète pour toute combinaison', () => {
     for (const g of allGenomes()) {
-      for (const stage of ['blob', 'child'] as const) {
+      for (const stage of ['blob', 'kid', 'teen', 'adult', 'grandpa'] as const) {
         for (const state of STATES) {
           const grid = buildSpriteGrid(state, stage, g);
           expect(grid.length).toBe(GRID);
@@ -41,7 +41,7 @@ describe('sprite procédural', () => {
 
   it('aucun pixel flottant : tout pixel non vide touche un autre pixel', () => {
     for (const g of allGenomes()) {
-      const grid = buildSpriteGrid('neutral', 'child', g);
+      const grid = buildSpriteGrid('neutral', 'kid', g);
       for (let y = 0; y < GRID; y++) {
         for (let x = 0; x < GRID; x++) {
           if (grid[y][x] === '.') continue;

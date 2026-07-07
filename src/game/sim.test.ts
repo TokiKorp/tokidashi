@@ -3,8 +3,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  buyChild,
+  buyCosmetic,
   collectCrumbs,
   createCompanion,
+  equipCosmetic,
   feed,
   play,
   startLearning,
@@ -13,7 +16,15 @@ import {
 } from './actions';
 import { DEFAULT_CONFIG, foodById, skillById, type GameConfig } from './config';
 import { growthFactor } from './genome';
-import { advanceSim, crumbCap, levelScale, upgradeCost, visibleState } from './sim';
+import {
+  advanceSim,
+  crumbCap,
+  crumbRatePerHour,
+  defendEvent,
+  levelScale,
+  upgradeCost,
+  visibleState,
+} from './sim';
 import type { CapacityGauge, CompanionState, WalletState } from './types';
 
 const cfg: GameConfig = DEFAULT_CONFIG;
@@ -22,12 +33,15 @@ const HOUR = 3600;
 function hatchedBlob(): CompanionState {
   const c = createCompanion('Testi');
   for (let i = 0; i < cfg.eggTapsToHatch; i++) tapEgg(c, cfg);
+  // Les événements aléatoires sont testés à part — on les neutralise ici
+  // pour garder les autres tests déterministes.
+  c.nextEventAtActive = Infinity;
   return c;
 }
 
 function child(): CompanionState {
   const c = hatchedBlob();
-  c.stage = 'child';
+  c.stage = 'kid';
   c.xp = 250;
   return c;
 }
@@ -215,10 +229,13 @@ describe('compétences : la bascule vers l\'autosuffisance', () => {
     expect(events.some((e) => e.type === 'skill-learned')).toBe(true);
 
     // Production modulée par l'humeur, plafonnée à N heures (GDD §7).
-    // Métabolisme neutralisé pour isoler la production sur la longue durée.
+    // Métabolisme ET évolution neutralisés pour isoler la production.
     const noHunger: GameConfig = {
       ...cfg,
-      stages: { ...cfg.stages, child: { ...cfg.stages.child, metabolismPerHour: 0 } },
+      stages: {
+        ...cfg.stages,
+        kid: { ...cfg.stages.kid, metabolismPerHour: 0, xpToNext: null },
+      },
     };
     const forageRate = skillById(cfg, 'crumb-forage')!.crumbsPerHour!;
     c.mood = 50; // multiplicateur ×1
@@ -307,7 +324,7 @@ describe('compétences : la bascule vers l\'autosuffisance', () => {
     // L'étude d'amélioration prend le même temps ; le niveau 1 produit pendant.
     const noHunger: GameConfig = {
       ...cfg,
-      stages: { ...cfg.stages, child: { ...cfg.stages.child, metabolismPerHour: 0 } },
+      stages: { ...cfg.stages, kid: { ...cfg.stages.kid, metabolismPerHour: 0 } },
     };
     c.satiety = 100;
     const events = advanceSim(c, w, forage.trainSeconds + 60, noHunger);
@@ -345,7 +362,8 @@ describe('compétences : la bascule vers l\'autosuffisance', () => {
   });
 
   it("les compétences d'Efficacité et de Conversion mordent vraiment", () => {
-    // Estomac économe : −25 % de métabolisme.
+    // Estomac économe : métabolisme réduit selon la définition.
+    const metaMult = skillById(cfg, 'lean-stomach')!.metabolismMultiplier!;
     const eco = child();
     eco.skills = [{ skillId: 'lean-stomach', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
     eco.satiety = 100;
@@ -353,23 +371,136 @@ describe('compétences : la bascule vers l\'autosuffisance', () => {
     temoin.satiety = 100;
     advanceSim(eco, wallet(), HOUR, cfg);
     advanceSim(temoin, wallet(), HOUR, cfg);
-    expect(100 - eco.satiety).toBeCloseTo((100 - temoin.satiety) * 0.75, 1);
+    expect(100 - eco.satiety).toBeCloseTo((100 - temoin.satiety) * metaMult, 1);
 
-    // Fin gourmet : croquette 20 % moins chère.
+    // Fin gourmet : croquette moins chère.
+    const foodMult = skillById(cfg, 'gourmet')!.foodCostMultiplier!;
+    const kibble = foodById(cfg, 'kibble')!;
     const gourmet = child();
     gourmet.skills = [{ skillId: 'gourmet', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
     gourmet.satiety = 10;
-    const w = wallet(12);
-    const res = feed(gourmet, w, capacity(), foodById(cfg, 'kibble')!, cfg);
+    const price = Math.ceil(kibble.cost * foodMult);
+    const w = wallet(price);
+    const res = feed(gourmet, w, capacity(), kibble, cfg);
     expect(res.ok).toBe(true);
-    expect(w.crumbs).toBe(0); // 15 × 0,8 = 12
+    expect(w.crumbs).toBe(0);
 
-    // Papilles dorées : la ration d'urgence nourrit 50 % de plus.
+    // Papilles dorées : la ration d'urgence nourrit davantage.
+    const satMult = skillById(cfg, 'golden-palate')!.tokenSatietyMultiplier!;
     const palate = child();
     palate.skills = [{ skillId: 'golden-palate', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
     palate.satiety = 0;
     feed(palate, wallet(), capacity(), foodById(cfg, 'emergency-ration')!, cfg);
-    expect(palate.satiety).toBe(75);
+    expect(palate.satiety).toBeCloseTo(50 * satMult, 1);
+  });
+
+  it("l'arbre contient au moins 100 compétences, toutes atteignables", () => {
+    expect(cfg.skills.length).toBeGreaterThanOrEqual(100);
+    // Ids uniques.
+    expect(new Set(cfg.skills.map((s) => s.id)).size).toBe(cfg.skills.length);
+    // Tout prérequis existe et ne crée pas de cycle (chaînes linéaires).
+    for (const s of cfg.skills) {
+      for (const req of s.requires ?? []) {
+        expect(skillById(cfg, req), `prérequis ${req} de ${s.id}`).toBeDefined();
+      }
+    }
+    // Les slots du Papy permettent un build conséquent.
+    expect(cfg.stages.grandpa.skillSlots).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe('événements aléatoires : pillards et aubaines', () => {
+  function readyForEvent(): CompanionState {
+    const c = child();
+    c.nextEventAtActive = 0; // événement dû immédiatement
+    return c;
+  }
+
+  it("une menace non défendue vole une partie du pot, puis reprogramme", () => {
+    const c = readyForEvent();
+    c.pendingCrumbs = 100;
+    c.satiety = 100;
+    const quiet: GameConfig = { ...cfg, rng: () => 0.01 }; // force le corbeau, pas d'auto-défense
+    const events = advanceSim(c, wallet(), 30, quiet);
+    expect(events.some((e) => e.type === 'event-started')).toBe(true);
+    expect(c.activeEvent).not.toBeNull();
+
+    // La fenêtre expire sans défense → le corbeau se sert.
+    const afterEvents = advanceSim(c, wallet(), cfg.eventWindowSeconds + 60, quiet);
+    expect(afterEvents.some((e) => e.type === 'event-lost')).toBe(true);
+    expect(c.pendingCrumbs).toBeLessThan(100);
+    expect(c.activeEvent).toBeNull();
+    expect(c.nextEventAtActive).toBeGreaterThan(c.activeSeconds);
+  });
+
+  it('défendre à temps sauve le butin et récompense', () => {
+    const c = readyForEvent();
+    c.pendingCrumbs = 100;
+    c.satiety = 100;
+    c.mood = 50;
+    const quiet: GameConfig = { ...cfg, rng: () => 0.01 };
+    advanceSim(c, wallet(), 30, quiet);
+    expect(c.activeEvent).not.toBeNull();
+
+    const events = defendEvent(c, quiet);
+    expect(events.some((e) => e.type === 'event-defended')).toBe(true);
+    expect(c.activeEvent).toBeNull();
+    expect(c.pendingCrumbs).toBe(100); // rien volé
+    expect(c.mood).toBeGreaterThan(50);
+  });
+
+  it('la Défense réduit les pertes', () => {
+    const naked = readyForEvent();
+    naked.pendingCrumbs = 100;
+    naked.satiety = 100;
+    const armored = readyForEvent();
+    armored.pendingCrumbs = 100;
+    armored.satiety = 100;
+    armored.skills = [
+      { skillId: 'epouvantail', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false },
+    ];
+    const quiet: GameConfig = { ...cfg, rng: () => 0.01 };
+    advanceSim(naked, wallet(), cfg.eventWindowSeconds + 90, quiet);
+    advanceSim(armored, wallet(), cfg.eventWindowSeconds + 90, quiet);
+    expect(100 - armored.pendingCrumbs).toBeLessThan(100 - naked.pendingCrumbs);
+  });
+});
+
+describe('boutique : cosmétiques et adoption', () => {
+  it('achète, équipe (un par emplacement) et retire un cosmétique', () => {
+    const c = child();
+    const w = wallet(1000);
+    expect(buyCosmetic(c, w, capacity(), 'beret', cfg).ok).toBe(true);
+    expect(c.cosmetics.equipped).toContain('beret'); // porté direct
+
+    // Un second chapeau remplace le premier (même emplacement).
+    expect(buyCosmetic(c, w, capacity(), 'party-hat', cfg).ok).toBe(true);
+    expect(c.cosmetics.equipped).toContain('party-hat');
+    expect(c.cosmetics.equipped).not.toContain('beret');
+    expect(c.cosmetics.owned).toContain('beret'); // toujours dans la garde-robe
+
+    // Retirer.
+    expect(equipCosmetic(c, 'party-hat', cfg).ok).toBe(true);
+    expect(c.cosmetics.equipped).not.toContain('party-hat');
+  });
+
+  it("adopte des petits (dès Ado, prix doublé, production bonus)", () => {
+    const kid = child();
+    expect(buyChild(kid, wallet(9999), capacity(), cfg).ok).toBe(false); // trop jeune
+
+    const c = child();
+    c.stage = 'teen';
+    const w = wallet(cfg.childBaseCost * 3);
+    expect(buyChild(c, w, capacity(), cfg).ok).toBe(true);
+    expect(c.children.length).toBe(1);
+    expect(w.crumbs).toBe(cfg.childBaseCost * 2); // premier petit : prix de base
+
+    // Le second coûte le double.
+    expect(buyChild(c, w, capacity(), cfg).ok).toBe(true);
+    expect(w.crumbs).toBe(0);
+
+    // Ils aident à la production.
+    expect(crumbRatePerHour(c, cfg)).toBeGreaterThan(0);
   });
 });
 
@@ -396,7 +527,7 @@ describe('interactions et progression', () => {
     c.xp = cfg.stages.blob.xpToNext! - 1;
     c.satiety = 100;
     const events = advanceSim(c, wallet(), HOUR, cfg);
-    expect(c.stage).toBe('child');
+    expect(c.stage).toBe('kid');
     expect(events.some((e) => e.type === 'evolved')).toBe(true);
   });
 

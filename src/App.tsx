@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 import { crumbJarFull } from './game/actions';
-import { skillById } from './game/config';
+import { eventById, skillById } from './game/config';
 import { growthFactor } from './game/genome';
 import { crumbCap, crumbRatePerHour, visibleState } from './game/sim';
 import { PetStage } from './render/PetStage';
@@ -14,9 +14,10 @@ import { formatActiveDuration, formatCrumbs, formatTokens } from './ui/format';
 import { Gauge } from './ui/Gauge';
 import { ReportModal } from './ui/ReportModal';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
+import { ShopPanel } from './ui/ShopPanel';
 import { SkillPanel } from './ui/SkillPanel';
 
-type OpenPanel = 'feed' | 'skills' | 'dev' | null;
+type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | null;
 
 export default function App() {
   const store = useTokidachi();
@@ -84,6 +85,8 @@ export default function App() {
           genome={c.genome}
           growth={growthFactor(c.tokensEaten)}
           pendingCrumbs={c.pendingCrumbs}
+          cosmetics={c.cosmetics.equipped}
+          children={c.children}
           onCollect={c.pendingCrumbs >= 1 ? store.collect : undefined}
           onTap={c.stage === 'egg' ? store.tapEgg : undefined}
         />
@@ -92,6 +95,22 @@ export default function App() {
             {reaction.text ?? '…'}
           </div>
         )}
+        {c.activeEvent && (() => {
+          const def = eventById(cfg, c.activeEvent.eventId);
+          const total = c.activeEvent.expiresAtActive - c.activeEvent.startedAtActive;
+          const left = Math.max(0, c.activeEvent.expiresAtActive - c.activeSeconds);
+          return (
+            <button className="event-threat" onClick={store.defend} title="Clique pour le chasser !">
+              <span className="event-emoji">{def?.emoji ?? '⚠️'}</span>
+              <span className="event-label">
+                {def?.label} — chasse-le !
+                <span className="event-timer">
+                  <span style={{ width: `${(left / total) * 100}%` }} />
+                </span>
+              </span>
+            </button>
+          );
+        })()}
         {locked && <div className="frozen-overlay">💤 Session verrouillée — gelé</div>}
         {c.stage === 'egg' && (
           <p className="egg-hint">
@@ -158,7 +177,8 @@ export default function App() {
             <nav className="actions">
               <button className="btn-primary" onClick={() => setPanel('feed')}>Nourrir</button>
               <button className="btn-primary" onClick={store.play}>Jouer</button>
-              <button className="btn-primary" onClick={() => setPanel('skills')}>Compétences</button>
+              <button className="btn-primary" onClick={() => setPanel('skills')}>Talents</button>
+              <button className="btn-primary" onClick={() => setPanel('shop')}>Boutique</button>
             </nav>
           </>
         )}
@@ -174,6 +194,7 @@ export default function App() {
 
       {panel === 'feed' && <FeedMenu onClose={() => setPanel(null)} />}
       {panel === 'skills' && <SkillPanel onClose={() => setPanel(null)} />}
+      {panel === 'shop' && <ShopPanel onClose={() => setPanel(null)} />}
       {panel === 'dev' && <DevPanel onClose={() => setPanel(null)} />}
       {report && <ReportModal report={report} />}
       {notice && <div className="toast">{notice}</div>}

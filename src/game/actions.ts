@@ -3,7 +3,7 @@
 // refus de gameplay — l'UI affiche la raison).
 
 import type { GameConfig } from './config';
-import { foodById, skillById } from './config';
+import { childCost, cosmeticById, foodById, skillById } from './config';
 import { generateGenome } from './genome';
 import {
   applyFoodEffects,
@@ -47,6 +47,10 @@ export function createCompanion(
     skills: [],
     pendingCrumbs: 0,
     foodHeat: {},
+    cosmetics: { owned: [], equipped: [] },
+    children: [],
+    activeEvent: null,
+    nextEventAtActive: 15 * 60 + rng() * 15 * 60, // premier événement entre 15 et 30 min
     lastPlayAtActive: -Infinity,
   };
 }
@@ -200,6 +204,89 @@ export function startUpgrade(
 
   sp.upgrading = true;
   sp.trainedSeconds = 0;
+  return { ok: true, events: [] };
+}
+
+// ————— Boutique (GDD §6.3) —————
+
+function pay(
+  wallet: WalletState,
+  capacity: CapacityGauge,
+  currency: 'crumbs' | 'token',
+  cost: number,
+): ActionResult | null {
+  if (currency === 'crumbs') {
+    if (wallet.crumbs < cost) return { ok: false, reason: 'Pas assez de Miettes.' };
+    wallet.crumbs -= cost;
+  } else {
+    if (!capacity.unlimited && capacity.budget - capacity.used < cost) {
+      return { ok: false, reason: 'Capacité TOKEN épuisée pour cette période.' };
+    }
+    capacity.used += cost;
+  }
+  return null;
+}
+
+export function buyCosmetic(
+  c: CompanionState,
+  wallet: WalletState,
+  capacity: CapacityGauge,
+  cosmeticId: string,
+  cfg: GameConfig,
+): ActionResult {
+  if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
+  const def = cosmeticById(cfg, cosmeticId);
+  if (!def) return { ok: false, reason: 'Article inconnu.' };
+  if (c.cosmetics.owned.includes(cosmeticId)) {
+    return { ok: false, reason: 'Déjà dans sa garde-robe.' };
+  }
+  const refused = pay(wallet, capacity, def.currency, def.cost);
+  if (refused) return refused;
+  c.cosmetics.owned.push(cosmeticId);
+  equipCosmetic(c, cosmeticId, cfg); // on le porte tout de suite, c'est plus drôle
+  return { ok: true, events: [] };
+}
+
+/** Équipe (en remplaçant l'article du même emplacement) ou retire s'il est porté. */
+export function equipCosmetic(
+  c: CompanionState,
+  cosmeticId: string,
+  cfg: GameConfig,
+): ActionResult {
+  const def = cosmeticById(cfg, cosmeticId);
+  if (!def) return { ok: false, reason: 'Article inconnu.' };
+  if (!c.cosmetics.owned.includes(cosmeticId)) {
+    return { ok: false, reason: 'Pas encore acheté.' };
+  }
+  if (c.cosmetics.equipped.includes(cosmeticId)) {
+    c.cosmetics.equipped = c.cosmetics.equipped.filter((id) => id !== cosmeticId);
+    return { ok: true, events: [] };
+  }
+  c.cosmetics.equipped = c.cosmetics.equipped.filter(
+    (id) => cosmeticById(cfg, id)?.slot !== def.slot,
+  );
+  c.cosmetics.equipped.push(cosmeticId);
+  return { ok: true, events: [] };
+}
+
+/** Adopter un petit : prix doublé à chaque adoption, génome aléatoire. */
+export function buyChild(
+  c: CompanionState,
+  wallet: WalletState,
+  capacity: CapacityGauge,
+  cfg: GameConfig,
+  rng: () => number = Math.random,
+): ActionResult {
+  if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
+  if (c.stage === 'egg' || c.stage === 'blob' || c.stage === 'kid') {
+    return { ok: false, reason: 'Trop jeune pour adopter — attends le stade Ado.' };
+  }
+  if (c.children.length >= cfg.maxChildren) {
+    return { ok: false, reason: 'La maison est pleine !' };
+  }
+  const refused = pay(wallet, capacity, 'crumbs', childCost(cfg, c.children.length));
+  if (refused) return refused;
+  c.children.push(generateGenome(rng));
   return { ok: true, events: [] };
 }
 

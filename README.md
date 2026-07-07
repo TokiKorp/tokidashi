@@ -44,7 +44,7 @@ recharge de la capacité simulée, simulation du verrouillage, remise à zéro.
 
 ## État du MVP (milestone 1)
 
-- [x] Stades Œuf → Blob → Enfant, éclosion par tapotement ou temps
+- [x] **6 stades** : Œuf → Blob → Kid → Ado → Adulte → Papy (marqueurs visuels par stade, métabolisme ralenti pour Papy)
 - [x] Satiété / Vitalité / Humeur, dégradation Faim → Humeur → Vitalité → Maladie → Mort
 - [x] Nourrissage 5 aliments (Miettes/TOKEN), réactions par tranche × humeur × stade
 - [x] **Apparence procédurale** : génome unique par Compagnon (forme, teinte, oreilles, taches)
@@ -52,8 +52,10 @@ recharge de la capacité simulée, simulation du verrouillage, remise à zéro.
 - [x] Échelle TOKEN réaliste (ration 100, festin 10k, budget 1M) + illimités en DEV
 - [x] **Prix dynamiques** : spammer un aliment fait grimper son prix (+60 %/achat, demi-vie 5 min active)
 - [x] **Miettes visibles et animées** : 1 sprite = 1 Miette dispo, envol depuis le Compagnon vers une position aléatoire, empilement par colonnes (carte de hauteurs), envolée au ramassage (clic) ; débit +N/h affiché
-- [x] **Arbre de compétences** : 7 compétences avec prérequis, stade requis affiché, racines dès le Blob (1 slot), 4 slots Enfant
-- [x] **Niveaux de compétences** : amélioration payante (coût ×1,8/niveau) + ré-étude, effet +50 %/niveau, max 5 (Garde-manger 1)
+- [x] **Arbre de 100 compétences** en 6 branches (Production, Automatisation, Efficacité, Conversion, Sociale, Défense), chaînes à prérequis, stade requis affiché, 2→30 slots selon le stade
+- [x] **Niveaux de compétences** : amélioration payante (coût ×1,8/niveau) + ré-étude, effet +50 %/niveau, max 5
+- [x] **Événements aléatoires** : corbeau/fourmis/pigeon à chasser d'un clic avant la fin du compte à rebours (sinon vol de Miettes/satiété), aubaines (pluie de miettes, papillon), branche Défense dédiée
+- [x] **Boutique** : 12 cosmétiques pixel art équipables (tête/visage/cou) + adoption de petits compagnons (génome aléatoire, +production, prix doublé)
 - [x] Gel au verrouillage (macOS) + rapport de retour
 - [x] Permadeath + mémorial, autosave
 - [x] Fenêtre overlay : transparente, sans bordures, always-on-top, position bas-droite, contrôles masquables

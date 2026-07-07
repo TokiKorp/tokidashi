@@ -2,7 +2,7 @@
 // Toutes les durées sont exprimées en secondes de TEMPS ACTIF (session déverrouillée,
 // app en vie) — jamais en temps calendaire (GDD §6.1).
 
-export type StageCode = 'egg' | 'blob' | 'child';
+export type StageCode = 'egg' | 'blob' | 'kid' | 'teen' | 'adult' | 'grandpa';
 
 export type VisibleState =
   | 'egg'
@@ -42,7 +42,8 @@ export type SkillCategory =
   | 'automation'
   | 'efficiency'
   | 'conversion'
-  | 'social';
+  | 'social'
+  | 'defense';
 
 export interface SkillDef {
   id: string;
@@ -70,6 +71,16 @@ export interface SkillDef {
   playCooldownMultiplier?: number;
   /** Sociale : bonus d'humeur ajouté quand on joue. */
   playMoodBonus?: number;
+  /** Sociale : multiplie l'XP passive. */
+  xpMultiplier?: number;
+  /** Défense : multiplie les pertes des événements (0,85 = −15 %). */
+  theftLossMultiplier?: number;
+  /** Défense : chance (additive, 0-1) de repousser une menace tout seul. */
+  autoDefendChance?: number;
+  /** Défense : multiplie la fenêtre de réaction aux menaces. */
+  eventWindowMultiplier?: number;
+  /** Automatisation : ramasse le pot tout seul quand il est presque plein. */
+  autoCollect?: boolean;
 }
 
 export type SkillState = 'learning' | 'owned';
@@ -125,6 +136,14 @@ export interface CompanionState {
    * redescend avec le temps actif (demi-vie ~5 min).
    */
   foodHeat: Record<string, number>;
+  /** Cosmétiques achetés / portés (un seul par emplacement). */
+  cosmetics: { owned: string[]; equipped: string[] };
+  /** Petits adoptés à la boutique — génome aléatoire, aident à la production. */
+  children: Genome[];
+  /** Événement en cours (menace à chasser d'un clic avant l'échéance). */
+  activeEvent: ActiveEvent | null;
+  /** Prochain événement aléatoire, en activeSeconds. */
+  nextEventAtActive: number;
   /** Marqueur (en activeSeconds) du dernier jeu — pour le cooldown. */
   lastPlayAtActive: number;
 }
@@ -149,6 +168,33 @@ export interface MemorialEntry {
   diedAtIso: string;
 }
 
+/** Cosmétique équipable (GDD §6.3) — rendu en pixels sur le sprite. */
+export interface CosmeticDef {
+  id: string;
+  label: string;
+  emoji: string;
+  slot: 'head' | 'face' | 'neck';
+  currency: Currency;
+  cost: number;
+}
+
+/** Menace ou aubaine aléatoire (GDD §8.2, saveur idle). */
+export interface EventDef {
+  id: string;
+  label: string;
+  emoji: string;
+  kind: 'threat' | 'boon';
+  weight: number;
+  /** Menace : description de ce qui est perdu si on ne réagit pas. */
+  threatText?: string;
+}
+
+export interface ActiveEvent {
+  eventId: string;
+  startedAtActive: number;
+  expiresAtActive: number;
+}
+
 export type SimEventType =
   | 'hatched'
   | 'evolved'
@@ -159,7 +205,12 @@ export type SimEventType =
   | 'skill-learned'
   | 'skill-upgraded'
   | 'crumb-cap-reached'
-  | 'auto-fed';
+  | 'auto-fed'
+  | 'auto-collected'
+  | 'event-started'
+  | 'event-defended'
+  | 'event-lost'
+  | 'event-boon';
 
 export interface SimEvent {
   type: SimEventType;

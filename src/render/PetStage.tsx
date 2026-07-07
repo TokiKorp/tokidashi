@@ -21,9 +21,26 @@ interface Props {
   growth: number;
   /** Miettes produites en attente → autant de miettes visibles au sol. */
   pendingCrumbs?: number;
+  /** Cosmétiques portés (boutique). */
+  cosmetics?: string[];
+  /** Petits adoptés — mini-sprites aux pieds du Compagnon. */
+  children?: Genome[];
   onCollect?: () => void;
   onTap?: () => void;
 }
+
+const STAGE_SCALE: Record<StageCode, number> = {
+  egg: 1,
+  blob: 1,
+  kid: 1.1,
+  teen: 1.2,
+  adult: 1.3,
+  grandpa: 1.25,
+};
+
+const CHILD_SPOTS: Array<[number, number]> = [
+  [34, 196], [230, 196], [64, 198], [200, 198],
+];
 
 // ——— Miettes au sol : la production se VOIT (et se ramasse au clic) ———
 
@@ -94,6 +111,8 @@ export function PetStage({
   genome,
   growth,
   pendingCrumbs = 0,
+  cosmetics = [],
+  children = [],
   onCollect,
   onTap,
 }: Props) {
@@ -105,8 +124,11 @@ export function PetStage({
   const growthRef = useRef(growth);
   const stageRef = useRef(stage);
   const onCollectRef = useRef(onCollect);
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
   const crumbCountRef = useRef(0);
   const crumbsRef = useRef<CrumbSprite[]>([]);
+  const childLayerRef = useRef<Container | null>(null);
   const heightsRef = useRef<number[]>(new Array(BUCKETS).fill(0));
   const leavingRef = useRef<Array<{ sprite: Sprite; start: number }>>([]);
   const timeRef = useRef(0);
@@ -145,6 +167,12 @@ export function PetStage({
       // Restauration : les miettes déjà produites sont posées sans vol.
       syncCrumbs(crumbCountRef.current, false);
 
+      // Les petits adoptés, entre les miettes et le Compagnon.
+      const childLayer = new Container();
+      a.stage.addChild(childLayer);
+      childLayerRef.current = childLayer;
+      populateChildren(childrenRef.current);
+
       const sprite = new Sprite();
       sprite.anchor.set(0.5, 1);
       sprite.position.set(STAGE_W / 2, STAGE_H - 4);
@@ -175,7 +203,7 @@ export function PetStage({
         // de s'élargir dans la grille via `fat`).
         const g = growthRef.current;
         const soft = g <= 1 ? g : 1 + Math.log2(g) * 0.5; // saturation douce
-        const stageK = stageRef.current === 'child' ? 1.15 : 1;
+        const stageK = STAGE_SCALE[stageRef.current];
         const sx = Math.min(MAX_SCALE, BASE_SCALE * stageK * (1 + 0.65 * soft));
         const sy = Math.min(MAX_SCALE, BASE_SCALE * stageK * (1 + 0.45 * soft));
 
@@ -237,6 +265,11 @@ export function PetStage({
           }
         });
 
+        // Les petits respirent en décalé.
+        childLayerRef.current?.children.forEach((kid, i) => {
+          kid.scale.set(3, 3 * (1 + 0.03 * Math.sin(t / 380 + i * 2.1)));
+        });
+
         // Ramassées : petite envolée + fondu.
         leavingRef.current = leavingRef.current.filter((l) => {
           const p = (t - l.start) / FADE_MS;
@@ -263,11 +296,12 @@ export function PetStage({
     };
   }, []);
 
-  // Changement d'état / stade / génome / embonpoint → nouvelles textures.
+  // Changement d'état / stade / génome / embonpoint / tenue → nouvelles textures.
   // `fat` est quantifié pour ne pas reconstruire la texture à chaque tick.
   const fatQ = Math.round(growth * 8) / 8;
+  const wearKey = cosmetics.join('|');
   useEffect(() => {
-    const frames = buildSprite(state, stage, genome, fatQ);
+    const frames = buildSprite(state, stage, genome, fatQ, cosmetics);
     animRef.current = {
       state,
       main: toTexture(frames.main),
@@ -276,7 +310,28 @@ export function PetStage({
       blinkUntil: 0,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, stage, genome.seed, fatQ]);
+  }, [state, stage, genome.seed, fatQ, wearKey]);
+
+  // Les petits adoptés : mini-sprites heureux aux pieds du Compagnon.
+  function populateChildren(genomes: Genome[]): void {
+    const layer = childLayerRef.current;
+    if (!layer) return;
+    layer.removeChildren();
+    genomes.forEach((g, i) => {
+      const mini = new Sprite(toTexture(buildSprite('happy', 'blob', g).main));
+      mini.anchor.set(0.5, 1);
+      mini.scale.set(3);
+      const [x, y] = CHILD_SPOTS[i % CHILD_SPOTS.length];
+      mini.position.set(x, y);
+      layer.addChild(mini);
+    });
+  }
+
+  const childKey = children.map((g) => g.seed).join('|');
+  useEffect(() => {
+    populateChildren(childrenRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childKey]);
 
   // Synchronise les sprites de miettes avec le compte disponible (1 pour 1) :
   // les nouvelles VOLENT depuis le Compagnon vers une colonne aléatoire et se

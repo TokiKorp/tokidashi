@@ -21,13 +21,18 @@ function clamp(v: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, v));
 }
 
-/** Effets cumulés des compétences acquises (Efficacité, Conversion, Sociale). */
+/** Effets cumulés des compétences acquises, toutes branches confondues. */
 export interface SkillModifiers {
   metabolism: number;
   foodCost: number;
   tokenSatiety: number;
   playCooldown: number;
   playMoodBonus: number;
+  xp: number;
+  theftLoss: number;
+  autoDefend: number;
+  eventWindow: number;
+  autoCollect: boolean;
 }
 
 /** Amplification d'effet selon le niveau : 1 / 1,5 / 2 / 2,5… (+50 %/niveau). */
@@ -56,6 +61,11 @@ export function skillModifiers(c: CompanionState, cfg: GameConfig): SkillModifie
     tokenSatiety: 1,
     playCooldown: 1,
     playMoodBonus: 0,
+    xp: 1,
+    theftLoss: 1,
+    autoDefend: 0,
+    eventWindow: 1,
+    autoCollect: false,
   };
   for (const sp of c.skills) {
     if (sp.state !== 'owned') continue;
@@ -67,7 +77,18 @@ export function skillModifiers(c: CompanionState, cfg: GameConfig): SkillModifie
     if (def.tokenSatietyMultiplier) m.tokenSatiety *= 1 + (def.tokenSatietyMultiplier - 1) * k;
     if (def.playCooldownMultiplier) m.playCooldown *= scaledReduction(def.playCooldownMultiplier, k);
     if (def.playMoodBonus) m.playMoodBonus += def.playMoodBonus * k;
+    if (def.xpMultiplier) m.xp *= 1 + (def.xpMultiplier - 1) * k;
+    if (def.theftLossMultiplier) m.theftLoss *= scaledReduction(def.theftLossMultiplier, k);
+    if (def.autoDefendChance) m.autoDefend += def.autoDefendChance * k;
+    if (def.eventWindowMultiplier) m.eventWindow *= 1 + (def.eventWindowMultiplier - 1) * k;
+    if (def.autoCollect) m.autoCollect = true;
   }
+  // Planchers : 100 compétences cumulables → on borne les produits de réductions.
+  m.metabolism = Math.max(0.2, m.metabolism);
+  m.foodCost = Math.max(0.25, m.foodCost);
+  m.playCooldown = Math.max(0.15, m.playCooldown);
+  m.theftLoss = Math.max(0.1, m.theftLoss);
+  m.autoDefend = Math.min(0.9, m.autoDefend);
   return m;
 }
 
@@ -211,14 +232,24 @@ function stepSim(
     }
   }
 
-  // — Auto-nourrissage (compétence Automatisation) : il se sert dans ses
-  //   propres Miettes, y compris celles non ramassées — il vit sa vie.
-  if (c.satiety < cfg.autoFeedThreshold && ownsSkill(c, cfg, 'automation')) {
+  // — Auto-ramassage (Majordome) : vide le pot quand il déborde.
+  if (mods.autoCollect && cap > 0 && c.pendingCrumbs >= cap * 0.9) {
+    wallet.crumbs += c.pendingCrumbs;
+    c.pendingCrumbs = 0;
+    events.push({ type: 'auto-collected' });
+  }
+
+  // — Auto-nourrissage (Garde-manger) : il se sert dans ses propres Miettes,
+  //   y compris celles non ramassées — il vit sa vie.
+  if (c.satiety < cfg.autoFeedThreshold && ownsSkillId(c, 'auto-feeder')) {
     autoFeed(c, wallet, cfg, events);
   }
 
-  // — XP passive + évolution par seuil (GDD §4.3).
-  c.xp += (cfg.xpPerActiveHour / HOUR) * s;
+  // — Événements aléatoires : menaces à chasser d'un clic, aubaines gratuites.
+  stepEvents(c, wallet, cfg, events, mods);
+
+  // — XP passive (boostée par la branche Sociale) + évolution par seuil.
+  c.xp += (cfg.xpPerActiveHour / HOUR) * s * mods.xp;
   const threshold = cfg.stages[c.stage].xpToNext;
   if (threshold !== null && c.xp >= threshold) {
     const next = nextStage(cfg, c.stage);
@@ -229,20 +260,122 @@ function stepSim(
   }
 }
 
+// ————— Événements aléatoires (GDD §8.2) —————
+
+function rng(cfg: GameConfig): number {
+  return (cfg.rng ?? Math.random)();
+}
+
+export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
+  const span = cfg.eventMaxIntervalSeconds - cfg.eventMinIntervalSeconds;
+  c.nextEventAtActive = c.activeSeconds + cfg.eventMinIntervalSeconds + rng(cfg) * span;
+}
+
+function stepEvents(
+  c: CompanionState,
+  wallet: WalletState,
+  cfg: GameConfig,
+  events: SimEvent[],
+  mods: SkillModifiers,
+): void {
+  if (c.activeEvent) {
+    if (c.activeSeconds >= c.activeEvent.expiresAtActive) {
+      applyThreatLoss(c, wallet, cfg, c.activeEvent.eventId, events, mods);
+      c.activeEvent = null;
+      scheduleNextEvent(c, cfg);
+    }
+    return;
+  }
+  if (c.activeSeconds < c.nextEventAtActive) return;
+
+  // Tirage pondéré.
+  const pool = cfg.events;
+  const total = pool.reduce((sum, e) => sum + e.weight, 0);
+  let roll = rng(cfg) * total;
+  const def = pool.find((e) => (roll -= e.weight) <= 0) ?? pool[0];
+
+  if (def.kind === 'boon') {
+    applyBoon(c, cfg, def.id, events);
+    scheduleNextEvent(c, cfg);
+    return;
+  }
+
+  // Menace : la Défense peut la repousser toute seule.
+  if (rng(cfg) < mods.autoDefend) {
+    events.push({ type: 'event-defended', data: { eventId: def.id, auto: true } });
+    scheduleNextEvent(c, cfg);
+    return;
+  }
+  const window = cfg.eventWindowSeconds * mods.eventWindow;
+  c.activeEvent = {
+    eventId: def.id,
+    startedAtActive: c.activeSeconds,
+    expiresAtActive: c.activeSeconds + window,
+  };
+  events.push({ type: 'event-started', data: { eventId: def.id } });
+}
+
+function applyBoon(
+  c: CompanionState,
+  cfg: GameConfig,
+  eventId: string,
+  events: SimEvent[],
+): void {
+  if (eventId === 'crumb-rain') {
+    const cap = crumbCap(c, cfg);
+    const gain = Math.round(20 + rng(cfg) * 60);
+    c.pendingCrumbs = cap > 0 ? Math.min(cap, c.pendingCrumbs + gain) : c.pendingCrumbs + gain;
+    events.push({ type: 'event-boon', data: { eventId, gain } });
+  } else {
+    // butterfly (et défaut) : un ami de passage remonte le moral.
+    c.mood = clamp(c.mood + 15);
+    events.push({ type: 'event-boon', data: { eventId } });
+  }
+}
+
+/** La menace n'a pas été chassée à temps : les pillards se servent. */
+function applyThreatLoss(
+  c: CompanionState,
+  wallet: WalletState,
+  cfg: GameConfig,
+  eventId: string,
+  events: SimEvent[],
+  mods: SkillModifiers,
+): void {
+  let lost = 0;
+  if (eventId === 'crumb-thief') {
+    lost = Math.floor(c.pendingCrumbs * cfg.thiefStealRatio * mods.theftLoss);
+    c.pendingCrumbs = Math.max(0, c.pendingCrumbs - lost);
+  } else if (eventId === 'ant-invasion') {
+    lost = Math.floor(wallet.crumbs * cfg.antStealRatio * mods.theftLoss);
+    wallet.crumbs -= lost;
+  } else if (eventId === 'greedy-pigeon') {
+    lost = Math.round(cfg.pigeonSatietyBite * mods.theftLoss);
+    c.satiety = clamp(c.satiety - lost);
+  }
+  c.mood = clamp(c.mood - 5);
+  events.push({ type: 'event-lost', data: { eventId, lost } });
+}
+
+/** Le joueur (ou l'auto-défense) chasse la menace : petit bonus de fierté. */
+export function defendEvent(c: CompanionState, cfg: GameConfig): SimEvent[] {
+  if (!c.activeEvent) return [];
+  const eventId = c.activeEvent.eventId;
+  c.activeEvent = null;
+  scheduleNextEvent(c, cfg);
+  c.mood = clamp(c.mood + 5);
+  c.xp += 15;
+  return [{ type: 'event-defended', data: { eventId } }];
+}
+
 export function hatch(c: CompanionState, events: SimEvent[]): void {
   if (c.stage !== 'egg') return;
   c.stage = 'blob';
   events.push({ type: 'hatched' });
 }
 
-function ownsSkill(
-  c: CompanionState,
-  cfg: GameConfig,
-  category: 'production' | 'automation',
-): boolean {
-  return c.skills.some(
-    (sp) => sp.state === 'owned' && skillById(cfg, sp.skillId)?.category === category,
-  );
+function ownsSkillId(c: CompanionState, skillId: string): boolean {
+  return c.skills.some((sp) => sp.state === 'owned' && sp.skillId === skillId);
 }
 
 function productionPerHour(c: CompanionState, cfg: GameConfig): number {
@@ -252,6 +385,8 @@ function productionPerHour(c: CompanionState, cfg: GameConfig): number {
     const base = skillById(cfg, sp.skillId)?.crumbsPerHour ?? 0;
     perHour += base * levelScale(cfg, sp.level);
   }
+  // Les petits adoptés donnent un coup de patte (boutique, Adoption).
+  perHour += c.children.length * cfg.childProductionPerHour;
   return perHour;
 }
 
