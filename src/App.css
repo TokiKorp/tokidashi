@@ -370,6 +370,12 @@ button {
   flex: 1;
 }
 
+.btn-icon {
+  font-size: 20px;
+  line-height: 1;
+  padding: 7px 0;
+}
+
 .btn-primary:active,
 .btn-secondary:active,
 .btn-danger:active {

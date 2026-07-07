@@ -175,10 +175,22 @@ export default function App() {
             )}
 
             <nav className="actions">
-              <button className="btn-primary" onClick={() => setPanel('feed')}>Nourrir</button>
-              <button className="btn-primary" onClick={store.play}>Jouer</button>
-              <button className="btn-primary" onClick={() => setPanel('skills')}>Talents</button>
-              <button className="btn-primary" onClick={() => setPanel('shop')}>Boutique</button>
+              <button className="btn-primary btn-icon" title="Nourrir" onClick={() => setPanel('feed')}>
+                🍽️
+              </button>
+              <button className="btn-primary btn-icon" title="Jouer" onClick={store.play}>
+                🎾
+              </button>
+              <button
+                className="btn-primary btn-icon"
+                title="Arbre de compétences"
+                onClick={() => setPanel('skills')}
+              >
+                🌳
+              </button>
+              <button className="btn-primary btn-icon" title="Boutique" onClick={() => setPanel('shop')}>
+                🛍️
+              </button>
             </nav>
           </>
         )}
