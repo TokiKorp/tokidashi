@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  tokidachi-server:
+    build: .
+    ports:
+      - '8080:8080'
+    volumes:
+      - tokidachi-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  tokidachi-data:

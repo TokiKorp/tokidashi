@@ -18,8 +18,9 @@ import { ReportModal } from './ui/ReportModal';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
 import { ShopPanel } from './ui/ShopPanel';
 import { SkillPanel } from './ui/SkillPanel';
+import { CloudPanel } from './ui/CloudPanel';
 
-type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | null;
+type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | null;
 
 export default function App() {
   const store = useTokidachi();
@@ -145,6 +146,9 @@ export default function App() {
           <span className="wallet" title="🪙 ta capacité IA (DEV : simulée) · 🍞 ses Miettes à lui">
             🪙 {formatTokens(tokenLeft)} · 🍞 {formatCrumbs(game.wallet.crumbs)}
           </span>
+          <button className="btn-toggle" title="Nuage & Classement" onClick={() => setPanel('cloud')}>
+            ☁
+          </button>
           <button className="btn-toggle" title="Réglages" onClick={() => setPanel('dev')}>
             ⚙
           </button>
@@ -211,6 +215,7 @@ export default function App() {
       {panel === 'skills' && <SkillPanel onClose={() => setPanel(null)} />}
       {panel === 'shop' && <ShopPanel onClose={() => setPanel(null)} />}
       {panel === 'dev' && <DevPanel onClose={() => setPanel(null)} />}
+      {panel === 'cloud' && <CloudPanel onClose={() => setPanel(null)} />}
       {report && <ReportModal report={report} />}
       {notice && <div className="toast">{notice}</div>}
     </div>

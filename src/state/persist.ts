@@ -11,6 +11,9 @@ export interface SaveData {
   selectedCli?: 'random' | 'agy' | 'codex' | 'claude';
   devMode?: boolean;
   savedAtIso: string;
+  backupId?: string;
+  cloudSyncEnabled?: boolean;
+  cloudServerUrl?: string;
 }
 
 const STORE_FILE = 'tokidachi.json';
@@ -46,6 +49,22 @@ export async function writeSave(data: SaveData): Promise<void> {
       await store.save();
     } else {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+    }
+
+    // Background cloud sync
+    if (data.cloudSyncEnabled && data.backupId && data.cloudServerUrl) {
+      const url = `${data.cloudServerUrl.replace(/\/$/, '')}/api/sync`;
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backupId: data.backupId,
+          saveData: data,
+          submitToLeaderboard: true,
+        }),
+      }).catch((err) => {
+        console.warn('Tokidachi: background cloud sync failed', err);
+      });
     }
   } catch (err) {
     console.error('Tokidachi: échec de sauvegarde', err);

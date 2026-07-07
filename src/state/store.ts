@@ -61,6 +61,11 @@ interface TokidachiStore {
   notice: string | null;
   report: ReturnReport | null;
 
+  // Cloud properties
+  backupId: string;
+  cloudSyncEnabled: boolean;
+  cloudServerUrl: string;
+
   init(): Promise<void>;
   tick(dtSeconds: number): void;
   adopt(name: string): void;
@@ -88,6 +93,13 @@ interface TokidachiStore {
 
   addTokensToBag(tokens: number, cliName: string): void;
   ensureTokensAvailable(cost: number): Promise<boolean>;
+
+  // Cloud methods
+  setCloudSyncEnabled(enabled: boolean): void;
+  setCloudServerUrl(url: string): void;
+  regenerateBackupId(): void;
+  triggerCloudSync(): Promise<boolean>;
+  restoreFromCloud(backupId: string): Promise<boolean>;
 
   // Panneau dev
   setSimSpeed(x: number): void;
@@ -190,21 +202,39 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   notice: null,
   report: null,
 
+  backupId: '',
+  cloudSyncEnabled: false,
+  cloudServerUrl: 'https://tokidachi-bb.bbb.com',
+
   async init() {
     const save = await loadSave();
+    const defaultBackupId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      
     if (save) {
       const devMode = save.devMode ?? false;
       const cfg = devMode ? get().cfg : { ...get().cfg, simSpeed: 1 };
+      const backupId = save.backupId ?? defaultBackupId;
       set({
         game: migrateGame(save.game, get().cfg),
         providerId: save.providerId,
         selectedCli: save.selectedCli ?? 'random',
         devMode,
         cfg,
+        backupId,
+        cloudSyncEnabled: save.cloudSyncEnabled ?? false,
+        cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi-bb.bbb.com',
         loaded: true,
       });
+      if (!save.backupId) {
+        void writeSave(makeSave(get()));
+      }
     } else {
-      set({ loaded: true });
+      set({
+        backupId: defaultBackupId,
+        loaded: true,
+      });
     }
   },
 
@@ -608,6 +638,88 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
+  setCloudSyncEnabled(enabled) {
+    set({ cloudSyncEnabled: enabled });
+    void writeSave(makeSave(get()));
+  },
+
+  setCloudServerUrl(url) {
+    set({ cloudServerUrl: url });
+    void writeSave(makeSave(get()));
+  },
+
+  regenerateBackupId() {
+    const backupId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2) + Date.now().toString(36);
+    set({ backupId });
+    void writeSave(makeSave(get()));
+  },
+
+  async triggerCloudSync() {
+    const { backupId, cloudServerUrl } = get();
+    if (!backupId || !cloudServerUrl) return false;
+    
+    try {
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/sync`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backupId,
+          saveData: makeSave(get()),
+          submitToLeaderboard: true,
+        }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error('Tokidachi: Sync error', err);
+      return false;
+    }
+  },
+
+  async restoreFromCloud(targetBackupId) {
+    const { cloudServerUrl } = get();
+    if (!targetBackupId || !cloudServerUrl) return false;
+    
+    try {
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/restore/${targetBackupId}`;
+      const res = await fetch(url);
+      if (!res.ok) return false;
+      
+      const data = await res.json();
+      if (data && data.saveData) {
+        const saveData = data.saveData;
+        const devMode = saveData.devMode ?? false;
+        const cfg = devMode ? get().cfg : { ...get().cfg, simSpeed: 1 };
+        
+        // Reset baseline
+        baseline = null;
+        
+        set({
+          game: migrateGame(saveData.game, get().cfg),
+          providerId: saveData.providerId,
+          selectedCli: saveData.selectedCli ?? 'random',
+          devMode,
+          cfg,
+          backupId: targetBackupId,
+          cloudSyncEnabled: saveData.cloudSyncEnabled ?? true,
+          cloudServerUrl: saveData.cloudServerUrl ?? cloudServerUrl,
+          reaction: null,
+          report: null,
+          notice: "Sauvegarde restaurée !",
+        });
+        
+        void writeSave(makeSave(get()));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Tokidachi: Restore error', err);
+      return false;
+    }
+  },
+
   async resetSave() {
     baseline = null;
     await clearSave();
@@ -623,6 +735,9 @@ function makeSave(s: TokidachiStore) {
     selectedCli: s.selectedCli,
     devMode: s.devMode,
     savedAtIso: new Date().toISOString(),
+    backupId: s.backupId,
+    cloudSyncEnabled: s.cloudSyncEnabled,
+    cloudServerUrl: s.cloudServerUrl,
   };
 }
 
