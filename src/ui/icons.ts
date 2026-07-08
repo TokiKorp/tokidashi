@@ -331,3 +331,19 @@ export const ICON_ROD: Grid = [
   'T...........',
   '............',
 ];
+
+/** Cadenas — parcelle/emplacement verrouillé. */
+export const ICON_LOCK: Grid = [
+  '............',
+  '...oooo.....',
+  '..o....o....',
+  '..o....o....',
+  '..o....o....',
+  '.oooooooo...',
+  '.oYYYYYYo...',
+  '.oYYoYYYo...',
+  '.oYYYYYYo...',
+  '.oYYYYYYo...',
+  '.oooooooo...',
+  '............',
+];

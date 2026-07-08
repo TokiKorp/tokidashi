@@ -11,7 +11,7 @@ import type { TreeRarity } from '../game/types';
 import { useTokidachi } from '../state/store';
 import { CompetenceTab } from './CompetenceTab';
 import { formatActiveDuration, formatCrumbs } from './format';
-import { ICON_CRUMB, ICON_SAPLING, ICON_STAR, ICON_WOOD } from './icons';
+import { ICON_CRUMB, ICON_LOCK, ICON_SAPLING, ICON_STAR, ICON_WOOD } from './icons';
 import { PixelIcon } from './PixelIcon';
 
 const RARITY_LABELS: Record<TreeRarity, string> = {
@@ -93,8 +93,9 @@ export function GardenPanel({ onClose }: Props) {
 
                 if (!unlocked) {
                   return (
-                    <div key={i} style={{ padding: '10px', border: '1px dashed rgba(0,0,0,0.2)', borderRadius: '8px', opacity: 0.5, textAlign: 'center', fontSize: '0.82em' }}>
-                      🔒 Parcelle verrouillée
+                    <div key={i} style={{ padding: '10px', border: '1px dashed rgba(0,0,0,0.2)', borderRadius: '8px', opacity: 0.5, textAlign: 'center', fontSize: '0.82em', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <PixelIcon grid={ICON_LOCK} alt="" />
+                      Parcelle verrouillée
                     </div>
                   );
                 }
