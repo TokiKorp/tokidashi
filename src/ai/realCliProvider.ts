@@ -9,6 +9,13 @@ export class RealCliProvider implements AIProvider {
   readonly kind = 'cli' as const;
 
   async generateReaction(ctx: ReactionContext): Promise<Reaction> {
+    if (ctx.currency === 'crumbs') {
+      return {
+        text: pickScriptedReaction(ctx.tier, ctx.moodBucket, ctx.stage),
+        source: 'scripted'
+      };
+    }
+
     // 1. Choose CLI and get a stupid random question
     const store = liveStore();
     const selectedCli = store.getState().selectedCli;
