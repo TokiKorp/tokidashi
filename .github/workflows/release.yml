@@ -34,6 +34,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Run tests
+        run: npm test
+
+      - name: Type-check frontend
+        run: npm run typecheck
+
       - name: Build frontend
         run: npm run build
 
@@ -69,6 +75,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ inputs.tag_name || github.ref_name }}
           releaseName: 'Tokidachi ${{ inputs.tag_name || github.ref_name }}'
@@ -133,6 +145,12 @@ jobs:
 
             app "Tokidachi.app"
 
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-dr", "com.apple.quarantine", "#{appdir}/Tokidachi.app"],
+                             sudo: false
+            end
+
             zap trash: [
               "~/Library/Application Support/fr.guillaume.tokidachi",
               "~/Library/Preferences/fr.guillaume.tokidachi.plist",
@@ -147,3 +165,218 @@ jobs:
           git add Casks/tokidachi.rb
           git commit -m "Update Tokidachi cask to v${VERSION}" || echo "No changes to commit"
           git push origin main
+
+  publish-windows:
+    needs: publish-tauri
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag_name || github.ref_name }}
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag_name || github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Stage MSIX payload
+        shell: pwsh
+        run: |
+          $staging = "msix-staging"
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          New-Item -ItemType Directory -Path "$staging/Assets" -Force | Out-Null
+
+          $exe = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" -File | Select-Object -First 1
+          if (-not $exe) { throw "No .exe found under src-tauri/target/release" }
+          Copy-Item $exe.FullName "$staging/tokidachi.exe"
+
+          Copy-Item "src-tauri/icons/Square44x44Logo.png" "$staging/Assets/Square44x44Logo.png"
+          Copy-Item "src-tauri/icons/Square150x150Logo.png" "$staging/Assets/Square150x150Logo.png"
+          Copy-Item "src-tauri/icons/StoreLogo.png" "$staging/Assets/StoreLogo.png"
+
+          (Get-Content "src-tauri/msix/AppxManifest.xml") -replace '__VERSION__', "${{ steps.version.outputs.version }}" | Set-Content "$staging/AppxManifest.xml"
+
+      - name: Locate Windows SDK tools
+        id: sdktools
+        shell: pwsh
+        run: |
+          $kitsRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
+          $latest = Get-ChildItem -Path $kitsRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (-not $latest) { throw "Could not find a Windows SDK version under $kitsRoot" }
+          $binDir = Join-Path $latest.FullName "x64"
+          "makeappx=$binDir\makeappx.exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "signtool=$binDir\signtool.exe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Pack MSIX
+        shell: pwsh
+        run: |
+          $msixName = "Tokidachi_${{ steps.version.outputs.version }}_x64.msix"
+          & "${{ steps.sdktools.outputs.makeappx }}" pack /d msix-staging /p $msixName /overwrite
+          if ($LASTEXITCODE -ne 0) { throw "makeappx failed with exit code $LASTEXITCODE" }
+
+      - name: Sign MSIX
+        id: sign
+        shell: pwsh
+        env:
+          WINDOWS_CERT_B64: ${{ secrets.WINDOWS_CERT_B64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msix = "Tokidachi_${version}_x64.msix"
+          $pfxPath = "codesign.pfx"
+
+          if ($env:WINDOWS_CERT_B64) {
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_B64))
+            $pfxPassword = $env:WINDOWS_CERT_PASSWORD
+            "selfsigned=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            $pfxPassword = [System.Guid]::NewGuid().ToString("N")
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Tokidachi" -CertStoreLocation "Cert:\CurrentUser\My"
+            $securePassword = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $securePassword | Out-Null
+            Export-Certificate -Cert $cert -FilePath "Tokidachi_${version}_x64.cer" | Out-Null
+            "selfsigned=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+          & "${{ steps.sdktools.outputs.signtool }}" sign /fd SHA256 /f $pfxPath /p $pfxPassword $msix
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+
+      - name: Upload MSIX assets to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ inputs.tag_name || github.ref_name }}"
+          $version = "${{ steps.version.outputs.version }}"
+          gh release upload $tag "Tokidachi_${version}_x64.msix" --clobber
+          gh release upload $tag "docs/INSTALL-MSIX.md" --clobber
+          if ("${{ steps.sign.outputs.selfsigned }}" -eq "true") {
+            gh release upload $tag "Tokidachi_${version}_x64.cer" --clobber
+          }
+
+  publish-android:
+    needs: publish-tauri
+    permissions:
+      contents: write
+    runs-on: [self-hosted, linux, x64, docker, proxmox]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+            ndk;27.1.12297006
+
+      - name: Install Rust stable (Android targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Gradle and Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-android-${{ hashFiles('src-tauri/Cargo.lock', '**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-android-
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Export Android NDK path
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "NDK_HOME=$SDK_ROOT/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/27.1.12297006" >> "$GITHUB_ENV"
+
+      - name: Initialize Android project
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npx tauri android init --ci --skip-targets-install
+          fi
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > src-tauri/gen/android/keystore.jks
+            cat > src-tauri/gen/android/keystore.properties <<PROPS
+          storeFile=keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          PROPS
+          else
+            echo "ANDROID_KEYSTORE_B64 is not set. Building an unsigned APK."
+          fi
+
+      - name: Build Android APK
+        run: npx tauri android build --ci --apk --target aarch64
+
+      - name: Upload APK to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag_name || github.ref_name }}"
+          APK_PATH=$(find src-tauri/gen/android -name "*.apk" | grep -i release | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find src-tauri/gen/android -name "*.apk" | head -n 1)
+          fi
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: No APK found under src-tauri/gen/android."
+            exit 1
+          fi
+          gh release upload "$TAG" "$APK_PATH" --clobber
