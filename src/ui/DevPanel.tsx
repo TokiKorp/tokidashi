@@ -7,6 +7,7 @@ import { providerById } from '../ai';
 import { useTokidachi } from '../state/store';
 import { formatTokens } from './format';
 import { TRANSLATIONS } from './translations';
+import { useConfirm } from './useConfirm';
 
 interface Props {
   onClose: () => void;
@@ -43,7 +44,8 @@ export function DevPanel({ onClose }: Props) {
   const provider = providerById(providerId);
   const unlimited = game.capacity.unlimited ?? false;
   const [keyInput, setKeyInput] = useState('');
-  
+  const { confirm, dialog } = useConfirm();
+
   const t = TRANSLATIONS[language];
 
   return (
@@ -363,8 +365,8 @@ export function DevPanel({ onClose }: Props) {
           <h3>{t.danger}</h3>
           <button
             className="btn-danger"
-            onClick={() => {
-              if (confirm(t.confirm_reset)) {
+            onClick={async () => {
+              if (await confirm(t.confirm_reset)) {
                 void resetSave();
                 onClose();
               }
@@ -376,6 +378,7 @@ export function DevPanel({ onClose }: Props) {
 
         <button className="btn-secondary" onClick={onClose}>{t.close}</button>
       </div>
+      {dialog}
     </div>
   );
 }

@@ -2,6 +2,8 @@ export type Language = 'fr' | 'en';
 
 export const TRANSLATIONS = {
   fr: {
+    dialog_confirm: "Confirmer",
+    dialog_cancel: "Annuler",
     settings: "Réglages",
     ai_provider: "Mode IA & Client",
     provider_type: "Type de Provider :",
@@ -66,6 +68,8 @@ export const TRANSLATIONS = {
     pool_panel: "La Mare",
   },
   en: {
+    dialog_confirm: "Confirm",
+    dialog_cancel: "Cancel",
     settings: "Settings",
     ai_provider: "AI & Client Mode",
     provider_type: "Provider Type:",

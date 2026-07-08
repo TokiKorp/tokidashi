@@ -488,9 +488,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   },
 
   grandpa: {
-    baseDecayPerHour: 60,
-    decayAccelPerHourSq: 40,
-    maxDecayPerHour: 600,
+    baseDecayPerHour: 25,
+    decayAccelPerHourSq: 12,
+    maxDecayPerHour: 300,
     nurseHealPerLevelPerHour: 8,
     deathAfterZeroVitalitySeconds: 5 * 60,
   },

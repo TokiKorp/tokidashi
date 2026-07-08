@@ -788,11 +788,11 @@ describe('papy : vieillesse accélérée', () => {
     return c;
   }
 
-  it('meurt au moins 5× plus vite que sous l\'ancienne courbe linéaire', () => {
-    // Ancienne courbe (10 + 1.5·t) : ~6,67 h pour tomber à 0, + 20 min de grâce ≈ 7,0 h.
-    // Nouvelle courbe : doit être morte bien avant 7,0 h / 5 ≈ 1,4 h.
+  it('meurt en environ 2-3h avec la courbe modérée (base 25/h, accel 12/h²)', () => {
     const c = grandpa();
-    advanceSim(c, wallet(), 1.4 * HOUR, cfg);
+    advanceSim(c, wallet(), 1 * HOUR, cfg);
+    expect(c.dead).toBe(false);
+    advanceSim(c, wallet(), 2 * HOUR, cfg);
     expect(c.dead).toBe(true);
   });
 
@@ -815,14 +815,14 @@ describe('papy : vieillesse accélérée', () => {
     nursed.skills = [{ skillId: 'nurse', state: 'owned', trainedSeconds: 0, level: 5, upgrading: false }];
     const naked = grandpa();
 
-    advanceSim(nursed, wallet(), 30 * 60, cfg);
-    advanceSim(naked, wallet(), 30 * 60, cfg);
+    advanceSim(nursed, wallet(), 2 * HOUR, cfg);
+    advanceSim(naked, wallet(), 2 * HOUR, cfg);
     expect(nursed.vitality).toBeGreaterThan(naked.vitality); // ralentit…
-    expect(nursed.vitality).toBeLessThan(100); // …mais ne stabilise pas (nurse L5 = 40/h < base 60/h)
+    expect(nursed.vitality).toBeLessThan(100); // …mais ne stabilise pas indéfiniment (nurse L5 = 40/h, dépassé par l'accélération)
 
     const nursedTimeToDeath = grandpa();
     nursedTimeToDeath.skills = nursed.skills;
-    advanceSim(nursedTimeToDeath, wallet(), 3 * HOUR, cfg);
+    advanceSim(nursedTimeToDeath, wallet(), 4 * HOUR, cfg);
     expect(nursedTimeToDeath.dead).toBe(true); // …et finit quand même par mourir
   });
 

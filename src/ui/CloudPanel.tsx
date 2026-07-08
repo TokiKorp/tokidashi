@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTokidachi } from '../state/store';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './format';
 import { TRANSLATIONS } from './translations';
+import { useConfirm } from './useConfirm';
 
 interface Props {
   onClose: () => void;
@@ -50,6 +51,7 @@ export function CloudPanel({ onClose }: Props) {
     language,
   } = useTokidachi();
   const t = TRANSLATIONS[language];
+  const { confirm, dialog } = useConfirm();
 
   const [activeTab, setActiveTab] = useState<Tab>('backup');
   const [serverUrlInput, setServerUrlInput] = useState(cloudServerUrl);
@@ -110,7 +112,7 @@ export function CloudPanel({ onClose }: Props) {
 
     const serverBackupId = result.serverBackupId ?? null;
     if (serverBackupId && serverBackupId !== backupId) {
-      const useCloudSave = confirm(
+      const useCloudSave = await confirm(
         "Ce compte possède déjà une sauvegarde différente de celle de cet appareil.\n\nOK = charger la sauvegarde du compte (écrase la sauvegarde locale).\nAnnuler = garder la sauvegarde locale (elle écrasera celle du compte au prochain envoi)."
       );
       if (useCloudSave) {
@@ -143,7 +145,7 @@ export function CloudPanel({ onClose }: Props) {
     const targetId = restoreIdInput.trim();
     if (!targetId) return;
 
-    const ok = confirm(
+    const ok = await confirm(
       "⚠️ RESTAURATION DU CLOUD\n\nCela va écraser définitivement votre compagnon local actuel par les données du cloud.\n\nÊtes-vous sûr de vouloir continuer ?"
     );
     if (!ok) return;
@@ -411,8 +413,8 @@ export function CloudPanel({ onClose }: Props) {
                       cursor: accountPseudo ? 'not-allowed' : 'pointer',
                       padding: 0
                     }}
-                    onClick={() => {
-                      if (confirm("⚠️ Attention : changer d'identifiant vous séparera de votre sauvegarde actuelle sur le cloud (une nouvelle sauvegarde sera créée). Continuer ?")) {
+                    onClick={async () => {
+                      if (await confirm("⚠️ Attention : changer d'identifiant vous séparera de votre sauvegarde actuelle sur le cloud (une nouvelle sauvegarde sera créée). Continuer ?")) {
                         regenerateBackupId();
                       }
                     }}
@@ -581,6 +583,7 @@ export function CloudPanel({ onClose }: Props) {
           Fermer
         </button>
       </div>
+      {dialog}
     </div>
   );
 }
