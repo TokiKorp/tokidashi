@@ -457,6 +457,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'premium-feast', label: 'Festin premium', emoji: '🍰', currency: 'token', cost: 10_000, satiety: 100, mood: 20, vitality: 15 },
     { id: 'emergency-ration', label: "Ration d'urgence", emoji: '🥫', currency: 'token', cost: 100, satiety: 50 },
     { id: 'health-kit', label: 'Kit de soin', emoji: '❤️', currency: 'token', cost: 1000, satiety: 0, vitality: 40, mood: 10 },
+    { id: 'crumb-fish', label: 'Poisson-miette', emoji: '🐟', currency: 'crumbs', cost: 0, satiety: 80, mood: 25, vitality: 10, resource: 'crumbFish' },
   ],
 
   skills: ALL_SKILLS,
@@ -614,6 +615,7 @@ export interface PrestigeSkillDef {
   label: string;
   description: string;
   cost: number;
+  requires?: string[];
 }
 
 export const PRESTIGE_SKILLS: PrestigeSkillDef[] = [
@@ -622,5 +624,13 @@ export const PRESTIGE_SKILLS: PrestigeSkillDef[] = [
   { id: 'fast-study', label: 'Sagesse des ancêtres', description: 'Les compétences s\'étudient 25% plus vite.', cost: 15 },
   { id: 'tax-shield', label: 'Paradis Fiscal', description: 'Le PEA n\'est plus soumis à la taxe étatique de 80% lors de la succession.', cost: 15 },
   { id: 'graveyard', label: 'Cimetière hanté', description: 'Permet au Tokidachi mort de générer passivement des Miettes dans le Mémorial (+0.5/h par heure de vie active atteinte).', cost: 20 },
+  { id: 'unlock-garden', label: 'Jardin ancestral', description: 'Débloque le Jardin de l\'Avant-poste : plante des arbres qui produisent du bois.', cost: 25 },
+  { id: 'unlock-camp', label: 'Feu de camp', description: 'Débloque le Feu de camp : brûle le bois du Jardin pour cuisiner du Poisson-miette.', cost: 35, requires: ['unlock-garden'] },
+  { id: 'unlock-pool', label: 'La Mare', description: 'Débloque la Mare : pêche au clic pour approvisionner le Feu de camp en poisson.', cost: 50, requires: ['unlock-camp'] },
 ];
+
+export function prestigeSkillBlocked(def: PrestigeSkillDef, owned: string[]): string[] | null {
+  const missing = (def.requires ?? []).filter((id) => !owned.includes(id));
+  return missing.length > 0 ? missing : null;
+}
 

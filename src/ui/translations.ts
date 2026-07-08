@@ -45,6 +45,10 @@ export const TRANSLATIONS = {
     lb_scope_all: "Tous les temps",
     lb_scope_alive: "Vivants",
     lb_died_on: "Mort le",
+
+    garden_panel: "Jardin",
+    camp_panel: "Feu de camp",
+    pool_panel: "La Mare",
   },
   en: {
     settings: "Settings",
@@ -90,5 +94,9 @@ export const TRANSLATIONS = {
     lb_scope_all: "All time",
     lb_scope_alive: "Alive",
     lb_died_on: "Died on",
+
+    garden_panel: "Garden",
+    camp_panel: "Fire Camp",
+    pool_panel: "The Pool",
   }
 };

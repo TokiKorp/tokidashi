@@ -18,6 +18,7 @@ export function FeedMenu({ onClose }: Props) {
   const c = game.companion;
   if (!c) return null;
   const mods = skillModifiers(c, cfg);
+  const crumbFishStock = game.outpost?.resources.crumbFish ?? 0;
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
@@ -25,7 +26,8 @@ export function FeedMenu({ onClose }: Props) {
         <h2>Nourrir</h2>
         <ul className="food-list">
           {cfg.foods.map((food) => {
-            const affordable = foodAffordable(c, food, game.wallet, game.capacity, cfg);
+            if (food.resource === 'crumbFish' && crumbFishStock < 1) return null;
+            const affordable = foodAffordable(c, food, game.wallet, game.capacity, cfg, game.outpost?.resources);
             const heat = c.foodHeat[food.id] ?? 0;
             const cost = effectiveFoodCost(food, mods, heat);
             const surged = heat > 0.25;
@@ -50,15 +52,19 @@ export function FeedMenu({ onClose }: Props) {
                     {food.mood ? ` · +${food.mood} humeur` : ''}
                     {food.vitality ? ` · +${food.vitality} vitalité` : ''}
                   </span>
-                  <span
-                    className={`food-cost cost-${food.currency} ${surged ? 'cost-surged' : ''}`}
-                    title={surged ? 'Prix gonflé par tes achats récents — il redescendra' : undefined}
-                  >
-                    {surged && <PixelIcon grid={ICON_ALERT} alt="prix gonflé" />}
-                    {food.currency === 'token'
-                      ? <><PixelIcon grid={ICON_TOKEN} alt="Token" /> {formatTokens(cost)} TOKEN</>
-                      : <><PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {cost}</>}
-                  </span>
+                  {food.resource === 'crumbFish' ? (
+                    <span className="food-cost">×{Math.floor(crumbFishStock)} en stock</span>
+                  ) : (
+                    <span
+                      className={`food-cost cost-${food.currency} ${surged ? 'cost-surged' : ''}`}
+                      title={surged ? 'Prix gonflé par tes achats récents — il redescendra' : undefined}
+                    >
+                      {surged && <PixelIcon grid={ICON_ALERT} alt="prix gonflé" />}
+                      {food.currency === 'token'
+                        ? <><PixelIcon grid={ICON_TOKEN} alt="Token" /> {formatTokens(cost)} TOKEN</>
+                        : <><PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {cost}</>}
+                    </span>
+                  )}
                 </button>
               </li>
             );
