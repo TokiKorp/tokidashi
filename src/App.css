@@ -85,10 +85,27 @@ body {
   font-weight: normal;
 }
 
-.wallet {
+.wallet-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 6px;
+  padding: 3px 6px;
   font-weight: bold;
-  font-size: 12px;
-  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink);
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+.wallet-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.wallet-separator {
+  color: var(--ink-soft);
 }
 
 .btn-close,

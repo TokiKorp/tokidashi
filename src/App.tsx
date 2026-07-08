@@ -19,12 +19,14 @@ import { AdoptScreen, DeathScreen } from './ui/Screens';
 import { ShopPanel } from './ui/ShopPanel';
 import { SkillPanel } from './ui/SkillPanel';
 import { CloudPanel } from './ui/CloudPanel';
+import { TRANSLATIONS } from './ui/translations';
 
 type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | null;
 
 export default function App() {
   const store = useTokidachi();
-  const { loaded, game, cfg, locked, reaction, notice, report } = store;
+  const { loaded, game, cfg, locked, reaction, notice, report, language } = store;
+  const t = TRANSLATIONS[language];
   const [panel, setPanel] = useState<OpenPanel>(null);
   const [hudVisible, setHudVisible] = useState(
     () => localStorage.getItem('tokidachi-hud') !== 'hidden',
@@ -129,7 +131,7 @@ export default function App() {
           <span className="minibar-stats">
             🍽️ {Math.round(c.satiety)} · 😊 {Math.round(c.mood)}
           </span>
-          <button className="btn-toggle" title="Afficher les contrôles" onClick={toggleHud}>
+          <button className="btn-toggle" title={t.show_hud} onClick={toggleHud}>
             ▴
           </button>
         </div>
@@ -143,19 +145,22 @@ export default function App() {
             </>
           }
         >
-          <span className="wallet" title="🪙 ta capacité IA (DEV : simulée) · 🍞 ses Miettes à lui">
-            🪙 {formatTokens(tokenLeft)} · 🍞 {formatCrumbs(game.wallet.crumbs)}
-          </span>
-          <button className="btn-toggle" title="Nuage & Classement" onClick={() => setPanel('cloud')}>
+          <button className="btn-toggle" title={t.cloud_panel} onClick={() => setPanel('cloud')}>
             ☁
           </button>
-          <button className="btn-toggle" title="Réglages" onClick={() => setPanel('dev')}>
+          <button className="btn-toggle" title={t.settings_panel} onClick={() => setPanel('dev')}>
             ⚙
           </button>
-          <button className="btn-toggle" title="Masquer les contrôles" onClick={toggleHud}>
+          <button className="btn-toggle" title={t.hide_hud} onClick={toggleHud}>
             ▾
           </button>
         </DragBar>
+
+        <div className="wallet-bar" title={t.wallet_tooltip}>
+          <span className="wallet-item">🪙 {tokenLeft !== null ? formatTokens(tokenLeft) : '∞'}</span>
+          <span className="wallet-separator">·</span>
+          <span className="wallet-item">🍞 {formatCrumbs(game.wallet.crumbs)}</span>
+        </div>
 
         {c.stage !== 'egg' && (
           <>
@@ -208,9 +213,9 @@ export default function App() {
         )}
 
         <footer className="statusbar">
-          <span>{formatActiveDuration(c.activeSeconds)} de vie active</span>
-          <span title="TOKEN mangés sur sa vie — il s'engraisse sans limite">
-            🍔 {formatTokens(Math.floor(c.tokensEaten))}
+          <span>{formatActiveDuration(c.activeSeconds)} {t.active_lifetime}</span>
+          <span title={language === 'fr' ? 'Croissance calée sur les jetons mangés' : 'Growth factor based on tokens eaten'}>
+            🍔 {formatTokens(Math.floor(c.tokensEaten))} ({t.growth} : {Math.round(growthFactor(c.tokensEaten) * 100)}%)
           </span>
           {cfg.simSpeed !== 1 && <span className="badge-dev">×{cfg.simSpeed}</span>}
         </footer>

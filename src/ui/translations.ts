@@ -27,6 +27,15 @@ export const TRANSLATIONS = {
     secret_key: "Clé secrète...",
     activate: "Activer",
     activate_dev_mode_label: "Activer le mode Dev :",
+    
+    // App.tsx
+    wallet_tooltip: "🪙 ta capacité IA (DEV : simulée) · 🍞 ses Miettes à lui",
+    active_lifetime: "de vie active",
+    growth: "Croissance",
+    cloud_panel: "Nuage & Classement",
+    settings_panel: "Réglages",
+    hide_hud: "Masquer les contrôles",
+    show_hud: "Afficher les contrôles",
   },
   en: {
     settings: "Settings",
@@ -54,5 +63,14 @@ export const TRANSLATIONS = {
     secret_key: "Secret key...",
     activate: "Activate",
     activate_dev_mode_label: "Activate Dev Mode:",
+
+    // App.tsx
+    wallet_tooltip: "🪙 your AI capacity (DEV: simulated) · 🍞 their own Crumbs",
+    active_lifetime: "active lifetime",
+    growth: "Growth",
+    cloud_panel: "Cloud & Leaderboard",
+    settings_panel: "Settings",
+    hide_hud: "Hide Controls",
+    show_hud: "Show Controls",
   }
 };
