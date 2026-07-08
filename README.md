@@ -16,11 +16,11 @@ Prérequis : Node ≥ 20 et Rust (`rustup`) pour la coque Tauri.
 
 ## Installation (macOS via Homebrew)
 
-Pour installer l'application compagnon directement sur macOS sans compiler les sources :
+Pour installer l'application compagnon directement sur macOS sans compiler les sources (et contourner l'avertissement de sécurité macOS « Développeur non identifié ») :
 
 ```bash
 brew tap basilelt/tap
-brew install --cask tokidachi
+brew install --cask --no-quarantine tokidachi
 ```
 
 ## Tester
