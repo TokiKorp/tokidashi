@@ -87,10 +87,42 @@ export interface GameConfig {
   /** Chaîne des contenants à Miettes (multiplie le plafond du pot). */
   containers: ContainerDef[];
 
-  /** Tourelle anti-OVNI : coût en TOKEN, croissance géométrique, chance d'interception par niveau. */
-  turret: { maxLevel: number; baseCost: number; costGrowth: number; chancePerLevel: number };
+  /**
+   * Tourelle anti-OVNI : coût en TOKEN (achat de niveau), croissance géométrique,
+   * chance d'interception par niveau, et coût en Miettes (munitions) par tir.
+   */
+  turret: {
+    maxLevel: number;
+    baseCost: number;
+    costGrowth: number;
+    chancePerLevel: number;
+    ammoCostPerShot: number;
+    ammoCostPerLevel: number;
+  };
+
+  /**
+   * Vieillesse (Papy) : la Vitalité se dégrade indépendamment de la Satiété,
+   * de plus en plus vite avec l'âge passé au stade (accélération quadratique).
+   */
+  grandpa: {
+    baseDecayPerHour: number;
+    decayAccelPerHourSq: number;
+    maxDecayPerHour: number;
+    nurseHealPerLevelPerHour: number;
+    /** Délai de grâce à Vitalité 0 avant la mort — plus court qu'aux autres stades. */
+    deathAfterZeroVitalitySeconds: number;
+  };
+
+  /** Clicker : cliquer sur le Compagnon rapporte des Miettes directement au portefeuille. */
+  click: {
+    baseCrumbsPerClick: number;
+    critMultiplier: number;
+    critChanceCap: number;
+  };
 
   devCapacityBudget: number;
+  /** Rythme de croisière du jeu (×1.25 par défaut) — simSpeed reste le multiplicateur DEV. */
+  baseTimeScale: number;
   simSpeed: number;
   /** Source d'aléa injectable (tests). */
   rng?: () => number;
@@ -269,7 +301,7 @@ const AUTOMATION: SkillDef[] = chain(
     ['drone-livreur', 'Drone livreur', { crumbsPerHour: 150 }, 'Livre des Miettes fraîches par les airs. +150 Miettes/h.'],
     ['chef-auto', 'Chef étoilé automatique', { tokenSatietyMultiplier: 1.2 }],
     ['pilote-vie', 'Pilote automatique de vie', { metabolismMultiplier: 0.88 }],
-    ['nurse', 'Infirmières', { maxLevel: 5, minStage: 'grandpa' }, 'Soigne le Tokidachi papy (+8%/h par niveau) mais ne suffit plus avec l\'âge.'],
+    ['nurse', 'Infirmières', { maxLevel: 5, minStage: 'grandpa' }, "Ralentit la perte de Vitalité du Tokidachi papy (+8/h par niveau) — un sursis, pas un remède : l'âge finit toujours par rattraper."],
     ['immortal', 'Toki éternel', { maxLevel: 1, cost: 10_000_000, minStage: 'grandpa' }, 'Rend le Tokidachi éternel. Il ne perd plus de vitalité avec la vieillesse.'],
   ],
   {
@@ -361,6 +393,35 @@ const DEFENSE: SkillDef[] = chain(
   },
 );
 
+// — Clicker (8) : la voie du doigt. Miettes directes au portefeuille, à la sueur de l'index.
+/** Multiplicateur d'un clic critique — même valeur que DEFAULT_CONFIG.click.critMultiplier. */
+const CLICK_CRIT_MULTIPLIER = 10;
+
+const CLICKER: SkillDef[] = chain(
+  [
+    ['doigt-leste', 'Doigt leste', { crumbsPerClick: 1 }],
+    ['pince-a-miettes', 'Pince à miettes', { crumbsPerClick: 2 }],
+    ['clic-chanceux', 'Clic chanceux', { clickCritChance: 0.05, maxLevel: 3 }],
+    ['double-clic', 'Double-clic', { crumbsPerClick: 3 }],
+    ['souris-gamer', 'Souris gamer', { clickCritChance: 0.05, maxLevel: 3 }],
+    ['macro-douteuse', 'Macro douteuse', { autoClicksPerHour: 400 }, "Un script qui clique à ta place. Le syndicat des doigts proteste. 400 clics/h automatiques."],
+    ['doigt-dore', 'Doigt doré', { crumbsPerClick: 5 }],
+    ['transcendance-tactile', 'Transcendance tactile', { crumbsPerClick: 8, clickCritChance: 0.05, maxLevel: 3 }],
+  ],
+  {
+    category: 'clicker',
+    baseCost: 60,
+    costGrowth: 2.1,
+    stageAt: (r) => (r < 1 ? 'blob' : r < 3 ? 'kid' : r < 5 ? 'teen' : r < 7 ? 'adult' : 'grandpa'),
+    describe: (e) =>
+      e.autoClicksPerHour
+        ? `Clique tout seul ${e.autoClicksPerHour} fois par heure active.`
+        : e.clickCritChance
+          ? `Augmente la chance de clic critique (×${CLICK_CRIT_MULTIPLIER} Miettes).`
+          : `Chaque clic sur le Compagnon rapporte +${e.crumbsPerClick} Miette${(e.crumbsPerClick ?? 0) > 1 ? 's' : ''}.`,
+  },
+);
+
 const ALL_SKILLS: SkillDef[] = [
   ...PRODUCTION,
   ...METABOLISM,
@@ -369,6 +430,7 @@ const ALL_SKILLS: SkillDef[] = [
   ...AUTOMATION,
   ...SOCIAL,
   ...DEFENSE,
+  ...CLICKER,
 ];
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -415,7 +477,28 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'gold-chain', label: 'Chaîne en or', emoji: '⛓️', slot: 'neck', currency: 'token', cost: 30_000 },
   ],
 
-  turret: { maxLevel: 5, baseCost: 500, costGrowth: 1.8, chancePerLevel: 0.2 },
+  turret: {
+    maxLevel: 5,
+    baseCost: 500,
+    costGrowth: 1.8,
+    chancePerLevel: 0.2,
+    ammoCostPerShot: 30,
+    ammoCostPerLevel: 15,
+  },
+
+  grandpa: {
+    baseDecayPerHour: 60,
+    decayAccelPerHourSq: 40,
+    maxDecayPerHour: 600,
+    nurseHealPerLevelPerHour: 8,
+    deathAfterZeroVitalitySeconds: 5 * 60,
+  },
+
+  click: {
+    baseCrumbsPerClick: 1,
+    critMultiplier: CLICK_CRIT_MULTIPLIER,
+    critChanceCap: 0.35,
+  },
 
   // Événements aléatoires — menaces (cliquer pour défendre) et aubaines.
   events: [
@@ -463,7 +546,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   eventMaxIntervalSeconds: 35 * 60,
   eventIntervalFloorSeconds: 90,
   crumbLureDivisor: 150,
-  eventWindowSeconds: 20,
+  eventWindowSeconds: 25, // 25 actifs ÷ baseTimeScale 1.25 = 20 s réelles — fenêtre réelle inchangée
   thiefStealRatio: 0.4,
   antStealRatio: 0.15,
   pigeonSatietyBite: 25,
@@ -486,6 +569,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   ],
 
   devCapacityBudget: 1_000_000,
+  baseTimeScale: 1.25,
   simSpeed: 1,
 };
 
@@ -518,6 +602,11 @@ export function childCost(cfg: GameConfig, currentChildren: number): number {
 /** Prix en TOKEN pour faire passer la tourelle du niveau `level` à `level + 1`. */
 export function turretCost(cfg: GameConfig, level: number): number {
   return Math.round(cfg.turret.baseCost * Math.pow(cfg.turret.costGrowth, level));
+}
+
+/** Coût en Miettes (munitions) d'un tir de tourelle au niveau `level`. */
+export function turretAmmoCost(cfg: GameConfig, level: number): number {
+  return level <= 0 ? 0 : cfg.turret.ammoCostPerShot + cfg.turret.ammoCostPerLevel * (level - 1);
 }
 
 export interface PrestigeSkillDef {

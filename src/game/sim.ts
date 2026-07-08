@@ -6,7 +6,7 @@
 // Chaque palier laisse une fenêtre d'action et émet un événement lisible.
 
 import type { GameConfig } from './config';
-import { foodById, nextStage, skillById, eventById } from './config';
+import { foodById, nextStage, skillById, eventById, turretAmmoCost } from './config';
 import type {
   CompanionState,
   FoodDef,
@@ -33,6 +33,9 @@ export interface SkillModifiers {
   autoDefend: number;
   eventWindow: number;
   autoCollect: boolean;
+  crumbsPerClick: number;
+  clickCrit: number;
+  autoClicksPerHour: number;
 }
 
 /** Amplification d'effet selon le niveau : 1 / 1,5 / 2 / 2,5… (+50 %/niveau). */
@@ -66,6 +69,9 @@ export function skillModifiers(c: CompanionState, cfg: GameConfig): SkillModifie
     autoDefend: 0,
     eventWindow: 1,
     autoCollect: false,
+    crumbsPerClick: 0,
+    clickCrit: 0,
+    autoClicksPerHour: 0,
   };
   for (const sp of c.skills) {
     if (sp.state !== 'owned') continue;
@@ -82,6 +88,9 @@ export function skillModifiers(c: CompanionState, cfg: GameConfig): SkillModifie
     if (def.autoDefendChance) m.autoDefend += def.autoDefendChance * k;
     if (def.eventWindowMultiplier) m.eventWindow *= 1 + (def.eventWindowMultiplier - 1) * k;
     if (def.autoCollect) m.autoCollect = true;
+    if (def.crumbsPerClick) m.crumbsPerClick += def.crumbsPerClick * k;
+    if (def.clickCritChance) m.clickCrit += def.clickCritChance * k;
+    if (def.autoClicksPerHour) m.autoClicksPerHour += def.autoClicksPerHour * k;
   }
   // Planchers : 100 compétences cumulables → on borne les produits de réductions.
   m.metabolism = Math.max(0.2, m.metabolism);
@@ -89,7 +98,17 @@ export function skillModifiers(c: CompanionState, cfg: GameConfig): SkillModifie
   m.playCooldown = Math.max(0.15, m.playCooldown);
   m.theftLoss = Math.max(0.1, m.theftLoss);
   m.autoDefend = Math.min(0.9, m.autoDefend);
+  m.clickCrit = Math.min(cfg.click.critChanceCap, m.clickCrit);
   return m;
+}
+
+/** Gain d'un clic sur le Compagnon : montant de base + compétences, et chance de critique. */
+export function clickValue(c: CompanionState, cfg: GameConfig): { amount: number; critChance: number } {
+  const mods = skillModifiers(c, cfg);
+  return {
+    amount: cfg.click.baseCrumbsPerClick + mods.crumbsPerClick,
+    critChance: mods.clickCrit,
+  };
 }
 
 /** Demi-vie de la chauffe des prix, en secondes actives. */
@@ -111,6 +130,25 @@ export function effectiveFoodCost(
 }
 
 /**
+ * Revenus passifs du portefeuille (PEA 5 %/h + cimetière) — factorisé pour être
+ * réutilisé tel quel par le tick sans Compagnon vivant (store.ts).
+ */
+export function passiveWalletIncome(wallet: WalletState, s: number): number {
+  let earned = 0;
+  if (wallet.pea && wallet.pea > 0) {
+    earned += (wallet.pea * 0.05 / HOUR) * s;
+  }
+  if (wallet.prestigeSkills?.includes('graveyard') && wallet.memorial && wallet.memorial.length > 0) {
+    const graveyardRate = wallet.memorial.reduce(
+      (sum, m) => sum + Math.max(5, Math.floor(m.activeSeconds / 3600) * 0.5),
+      0,
+    );
+    earned += (graveyardRate / HOUR) * s;
+  }
+  return earned;
+}
+
+/**
  * Avance la simulation de `dtSeconds` de temps actif. Mute `c` et `wallet`
  * (l'appelant clone avant). Le dt est découpé en pas de 60 s max pour que les
  * franchissements de seuils restent précis même après un long passage en fond.
@@ -122,7 +160,7 @@ export function advanceSim(
   cfg: GameConfig,
 ): SimEvent[] {
   const events: SimEvent[] = [];
-  let remaining = dtSeconds * cfg.simSpeed;
+  let remaining = dtSeconds * cfg.simSpeed * cfg.baseTimeScale;
   while (remaining > 0 && !c.dead) {
     const step = Math.min(remaining, 60);
     remaining -= step;
@@ -176,11 +214,15 @@ function stepSim(
       }
       const grandpaAge = c.activeSeconds - c.grandpaEnteredAt;
       const ageInHours = grandpaAge / 3600;
-      const decayRate = 10 + ageInHours * 1.5; // Dégrade de plus en plus vite
-      
+      // Accélération quadratique : chaque heure passée en Papy dégrade plus vite que la précédente.
+      const decayRate = Math.min(
+        cfg.grandpa.maxDecayPerHour,
+        cfg.grandpa.baseDecayPerHour + cfg.grandpa.decayAccelPerHourSq * ageInHours * ageInHours,
+      );
+
       const nurseLevel = c.skills.find((sp) => sp.skillId === 'nurse' && sp.state === 'owned')?.level ?? 0;
-      const nurseHeal = nurseLevel * 8; // Soin passif
-      
+      const nurseHeal = nurseLevel * cfg.grandpa.nurseHealPerLevelPerHour;
+
       const netRate = nurseHeal - decayRate;
       c.vitality = clamp(c.vitality + (netRate / HOUR) * s);
     }
@@ -202,9 +244,12 @@ function stepSim(
   }
 
   // 5. Mort — seulement après un temps prolongé à Vitalité 0 (permadeath, GDD §8.3).
+  //    Le Papy a un délai de grâce plus court : sa dégradation est déjà bien plus sévère.
   if (c.vitality <= 0) {
     c.zeroVitalitySeconds += s;
-    if (c.zeroVitalitySeconds >= cfg.deathAfterZeroVitalitySeconds) {
+    const grace =
+      c.stage === 'grandpa' ? cfg.grandpa.deathAfterZeroVitalitySeconds : cfg.deathAfterZeroVitalitySeconds;
+    if (c.zeroVitalitySeconds >= grace) {
       c.dead = true;
       events.push({ type: 'died' });
       return;
@@ -259,21 +304,18 @@ function stepSim(
     }
   }
 
-  // PEA passive interest (5% yield per active hour)
-  if (wallet.pea && wallet.pea > 0) {
-    const yieldRate = 0.05; // 5% per hour
-    const earned = (wallet.pea * yieldRate / HOUR) * s;
-    wallet.crumbs += earned;
-    c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + earned;
+  // — Revenus passifs (PEA + cimetière) — même helper que le tick sans Compagnon vivant.
+  const passiveIncome = passiveWalletIncome(wallet, s);
+  if (passiveIncome > 0) {
+    wallet.crumbs += passiveIncome;
+    c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + passiveIncome;
   }
 
-  // Graveyard passive crumb generation
-  if (wallet.prestigeSkills?.includes('graveyard') && wallet.memorial && wallet.memorial.length > 0) {
-    const graveyardRate = wallet.memorial.reduce(
-      (sum, m) => sum + Math.max(5, Math.floor(m.activeSeconds / 3600) * 0.5),
-      0
-    );
-    const earned = (graveyardRate / HOUR) * s;
+  // — Auto-clicker (compétence "Macro douteuse") — valeur espérée, déterministe.
+  if (mods.autoClicksPerHour > 0) {
+    const { amount, critChance } = clickValue(c, cfg);
+    const expectedPerClick = amount * (1 + critChance * (cfg.click.critMultiplier - 1));
+    const earned = (mods.autoClicksPerHour * expectedPerClick / HOUR) * s;
     wallet.crumbs += earned;
     c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + earned;
   }
@@ -301,7 +343,7 @@ function stepSim(
   }
 
   // — Événements aléatoires : menaces à chasser d'un clic, aubaines gratuites.
-  stepEvents(c, cfg, events, mods);
+  stepEvents(c, wallet, cfg, events, mods);
 
   // — XP passive (boostée par la branche Sociale) + évolution par seuil.
   c.xp += (cfg.xpPerActiveHour / HOUR) * s * mods.xp;
@@ -338,6 +380,7 @@ export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
 
 function stepEvents(
   c: CompanionState,
+  wallet: WalletState,
   cfg: GameConfig,
   events: SimEvent[],
   mods: SkillModifiers,
@@ -356,16 +399,13 @@ function stepEvents(
     }
     return;
   }
-  
+
   if (cfg.disableEnemies) return;
   if (c.activeSeconds < c.nextEventAtActive) return;
 
   // Tirage pondéré. L'OVNI ne rôde que s'il y a des petits à enlever, et le
   // corbeau est d'autant plus attiré que le pot déborde.
-  const pool = cfg.events.filter((e) => {
-    if (cfg.disableEnemies && e.kind === 'threat') return false;
-    return !e.requiresChildren || c.children.length > 0;
-  });
+  const pool = cfg.events.filter((e) => !e.requiresChildren || c.children.length > 0);
   if (pool.length === 0) {
     scheduleNextEvent(c, cfg);
     return;
@@ -383,8 +423,15 @@ function stepEvents(
   }
 
   // Menace : la Défense peut la repousser toute seule — et contre l'OVNI,
-  // la tourelle anti-OVNI s'ajoute.
-  const turretBonus = def.id === 'ufo-abduction' ? ufoInterceptChance(c, cfg) : 0;
+  // la tourelle anti-OVNI s'ajoute, à condition d'avoir des munitions (Miettes).
+  let turretBonus = 0;
+  if (def.id === 'ufo-abduction' && (c.turretLevel ?? 0) > 0) {
+    const ammo = turretAmmoCost(cfg, c.turretLevel ?? 0);
+    if (wallet.crumbs >= ammo) {
+      wallet.crumbs -= ammo;
+      turretBonus = ufoInterceptChance(c, cfg);
+    }
+  }
   if (rng(cfg) < Math.min(0.98, mods.autoDefend + turretBonus)) {
     events.push({ type: 'event-defended', data: { eventId: def.id, auto: true, turret: turretBonus > 0 } });
     scheduleNextEvent(c, cfg);

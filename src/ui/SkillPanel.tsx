@@ -22,6 +22,7 @@ const CATEGORY_LABELS: Record<SkillCategory, string> = {
   conversion: 'Conversion',
   social: 'Sociale',
   defense: 'Défense',
+  clicker: 'Clicker',
 };
 
 const CATEGORY_COLORS: Record<SkillCategory, string> = {
@@ -31,10 +32,12 @@ const CATEGORY_COLORS: Record<SkillCategory, string> = {
   conversion: '#b06fd8',   // violet
   social: '#ff9aa2',       // pink
   defense: '#e07a5f',      // danger/orange
+  clicker: '#4ecdc4',      // turquoise
 };
 
 const CATEGORY_ORDER: SkillCategory[] = [
   'production',
+  'clicker',
   'automation',
   'efficiency',
   'conversion',

@@ -6,6 +6,7 @@ import {
   buyChild,
   buyCosmetic,
   buyTurret,
+  clickPet,
   collectCrumbs,
   createCompanion,
   equipCosmetic,
@@ -16,10 +17,11 @@ import {
   tapEgg,
   upgradeContainer,
 } from './actions';
-import { DEFAULT_CONFIG, foodById, skillById, type GameConfig } from './config';
+import { DEFAULT_CONFIG, foodById, skillById, turretAmmoCost, type GameConfig } from './config';
 import { growthFactor } from './genome';
 import {
   advanceSim,
+  clickValue,
   crumbCap,
   crumbRatePerHour,
   defendEvent,
@@ -28,9 +30,11 @@ import {
   upgradeCost,
   visibleState,
 } from './sim';
-import type { CapacityGauge, CompanionState, WalletState } from './types';
+import type { CapacityGauge, CompanionState, SimEvent, WalletState } from './types';
 
-const cfg: GameConfig = DEFAULT_CONFIG;
+// baseTimeScale figé à 1 ici : les tests raisonnent en secondes actives "brutes" ;
+// le ×1.25 de rythme de croisière est vérifié isolément (cf. describe dédié plus bas).
+const cfg: GameConfig = { ...DEFAULT_CONFIG, baseTimeScale: 1 };
 const HOUR = 3600;
 
 function hatchedBlob(): CompanionState {
@@ -521,7 +525,7 @@ describe('événements aléatoires : pillards et aubaines', () => {
     expect(w.crumbs).toBe(500);
   });
 
-  it("une tourelle bien améliorée intercepte l'OVNI avant qu'il n'agisse", () => {
+  it("une tourelle bien améliorée intercepte l'OVNI avant qu'il n'agisse, en consommant des munitions", () => {
     const c = child();
     c.stage = 'teen';
     c.satiety = 100;
@@ -530,10 +534,38 @@ describe('événements aléatoires : pillards et aubaines', () => {
     c.children = [{ seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false }];
     c.nextEventAtActive = 0;
     const forced: GameConfig = { ...cfg, rng: () => 0.7 };
-    const events = advanceSim(c, wallet(), 30, forced);
+    const w = wallet(1000);
+    const events = advanceSim(c, w, 30, forced);
     expect(events.some((e) => e.type === 'event-defended' && e.data?.turret === true)).toBe(true);
     expect(c.children.length).toBe(1);
     expect(c.activeEvent).toBeNull();
+    expect(w.crumbs).toBe(1000 - turretAmmoCost(cfg, 5));
+  });
+
+  it('une tourelle sans munitions (portefeuille vide) reste hors ligne', () => {
+    const c = child();
+    c.stage = 'teen';
+    c.satiety = 100;
+    c.pendingCrumbs = 0;
+    c.turretLevel = 5;
+    c.children = [{ seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false }];
+    c.nextEventAtActive = 0;
+    const forced: GameConfig = { ...cfg, rng: () => 0.7 };
+    const w = wallet(0);
+    const events = advanceSim(c, w, 30, forced);
+    expect(events.some((e) => e.type === 'event-defended' && e.data?.turret === true)).toBe(false);
+    expect(w.crumbs).toBe(0);
+  });
+
+  it("une menace non-OVNI ne consomme jamais de munitions de tourelle", () => {
+    const c = readyForEvent();
+    c.turretLevel = 5;
+    c.pendingCrumbs = 100;
+    c.satiety = 100;
+    const w = wallet(1000);
+    const quiet: GameConfig = { ...cfg, rng: () => 0.01 }; // force le corbeau
+    advanceSim(c, w, 30, quiet);
+    expect(w.crumbs).toBe(1000);
   });
 
   it("les petits creusent l'appétit du foyer", () => {
@@ -734,5 +766,163 @@ describe('interactions et progression', () => {
     c.satiety = 80;
     advanceSim(c, wallet(), 60, fast); // 1 min réelle = 1 h simulée
     expect(c.satiety).toBeCloseTo(80 - cfg.stages.blob.metabolismPerHour, 1);
+  });
+
+  it('le baseTimeScale (×1.25 par défaut) accélère le rythme de croisière', () => {
+    const c = hatchedBlob();
+    c.satiety = 80;
+    advanceSim(c, wallet(), HOUR, DEFAULT_CONFIG); // baseTimeScale réel (1.25), simSpeed 1
+    expect(c.satiety).toBeCloseTo(80 - cfg.stages.blob.metabolismPerHour * DEFAULT_CONFIG.baseTimeScale, 1);
+    expect(DEFAULT_CONFIG.baseTimeScale).toBe(1.25);
+  });
+});
+
+describe('papy : vieillesse accélérée', () => {
+  function grandpa(): CompanionState {
+    const c = child();
+    c.stage = 'grandpa';
+    c.grandpaEnteredAt = c.activeSeconds;
+    c.satiety = 100;
+    c.vitality = 100;
+    c.nextEventAtActive = Infinity;
+    return c;
+  }
+
+  it('meurt au moins 5× plus vite que sous l\'ancienne courbe linéaire', () => {
+    // Ancienne courbe (10 + 1.5·t) : ~6,67 h pour tomber à 0, + 20 min de grâce ≈ 7,0 h.
+    // Nouvelle courbe : doit être morte bien avant 7,0 h / 5 ≈ 1,4 h.
+    const c = grandpa();
+    advanceSim(c, wallet(), 1.4 * HOUR, cfg);
+    expect(c.dead).toBe(true);
+  });
+
+  it('la dégradation est strictement croissante avec l\'âge (accélération, pas linéaire)', () => {
+    const early = grandpa();
+    advanceSim(early, wallet(), 30 * 60, cfg);
+    const earlyLoss = 100 - early.vitality;
+
+    const late = grandpa();
+    advanceSim(late, wallet(), 30 * 60, cfg); // 0 → 30 min
+    late.vitality = 100; // reset pour mesurer la fenêtre suivante isolément
+    advanceSim(late, wallet(), 30 * 60, cfg); // 30 → 60 min
+    const lateLoss = 100 - late.vitality;
+
+    expect(lateLoss).toBeGreaterThan(earlyLoss);
+  });
+
+  it("l'infirmière ralentit la dégradation mais ne l'arrête jamais (sursis, pas remède)", () => {
+    const nursed = grandpa();
+    nursed.skills = [{ skillId: 'nurse', state: 'owned', trainedSeconds: 0, level: 5, upgrading: false }];
+    const naked = grandpa();
+
+    advanceSim(nursed, wallet(), 30 * 60, cfg);
+    advanceSim(naked, wallet(), 30 * 60, cfg);
+    expect(nursed.vitality).toBeGreaterThan(naked.vitality); // ralentit…
+    expect(nursed.vitality).toBeLessThan(100); // …mais ne stabilise pas (nurse L5 = 40/h < base 60/h)
+
+    const nursedTimeToDeath = grandpa();
+    nursedTimeToDeath.skills = nursed.skills;
+    advanceSim(nursedTimeToDeath, wallet(), 3 * HOUR, cfg);
+    expect(nursedTimeToDeath.dead).toBe(true); // …et finit quand même par mourir
+  });
+
+  it("le Toki éternel (immortal) stoppe totalement la dégradation", () => {
+    const c = grandpa();
+    c.skills = [{ skillId: 'immortal', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    advanceSim(c, wallet(), 10 * HOUR, cfg);
+    expect(c.vitality).toBe(100);
+    expect(c.dead).toBe(false);
+  });
+
+  it('le délai de grâce à Vitalité 0 est plus court pour le Papy que pour les autres stades', () => {
+    const c = grandpa();
+    c.vitality = 0;
+    c.zeroVitalitySeconds = cfg.grandpa.deathAfterZeroVitalitySeconds - 50;
+    advanceSim(c, wallet(), 0, cfg); // no-op, juste pour vérifier l'état de départ
+    expect(c.dead).toBe(false);
+
+    const stillAlive = grandpa();
+    stillAlive.vitality = 0;
+    advanceSim(stillAlive, wallet(), cfg.grandpa.deathAfterZeroVitalitySeconds - 50, cfg);
+    expect(stillAlive.dead).toBe(false);
+
+    const nowDead = grandpa();
+    nowDead.vitality = 0;
+    advanceSim(nowDead, wallet(), cfg.grandpa.deathAfterZeroVitalitySeconds + 50, cfg);
+    expect(nowDead.dead).toBe(true);
+
+    expect(cfg.grandpa.deathAfterZeroVitalitySeconds).toBeLessThan(cfg.deathAfterZeroVitalitySeconds);
+  });
+
+  it('le taux de dégradation est plafonné (maxDecayPerHour) même pour un Papy très âgé', () => {
+    const veryOld = grandpa();
+    veryOld.grandpaEnteredAt = veryOld.activeSeconds - 10 * HOUR; // déjà 10 h de vieillesse
+    const before = veryOld.vitality;
+    advanceSim(veryOld, wallet(), 60, cfg); // 1 minute
+    const lossPerHour = ((before - veryOld.vitality) / 60) * HOUR;
+    expect(lossPerHour).toBeLessThanOrEqual(cfg.grandpa.maxDecayPerHour + 1); // marge d'arrondi
+  });
+});
+
+describe('clicker : Miettes au clic', () => {
+  it('un clic de base rapporte cfg.click.baseCrumbsPerClick Miettes au portefeuille', () => {
+    const c = child();
+    const w = wallet(0);
+    const res = clickPet(c, w, cfg, () => 0.99); // rng haut : jamais critique
+    expect(res.ok).toBe(true);
+    expect(w.crumbs).toBe(cfg.click.baseCrumbsPerClick);
+    expect(c.totalCrumbsGenerated).toBe(cfg.click.baseCrumbsPerClick);
+  });
+
+  it("l'œuf refuse le clic, le Compagnon mort aussi", () => {
+    const egg = createCompanion('Œuf');
+    expect(clickPet(egg, wallet(), cfg, () => 0.99).ok).toBe(false);
+
+    const dead = child();
+    dead.dead = true;
+    expect(clickPet(dead, wallet(), cfg, () => 0.99).ok).toBe(false);
+  });
+
+  it('la compétence "Doigt leste" augmente le gain par clic, amplifié par le niveau', () => {
+    const c = child();
+    c.skills = [{ skillId: 'doigt-leste', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const w1 = wallet(0);
+    clickPet(c, w1, cfg, () => 0.99);
+    expect(w1.crumbs).toBe(cfg.click.baseCrumbsPerClick + 1);
+
+    c.skills[0].level = 5;
+    const w5 = wallet(0);
+    clickPet(c, w5, cfg, () => 0.99);
+    expect(w5.crumbs).toBeCloseTo(cfg.click.baseCrumbsPerClick + 1 * levelScale(cfg, 5), 5);
+  });
+
+  it('un clic critique multiplie le gain par cfg.click.critMultiplier', () => {
+    const c = child();
+    c.skills = [{ skillId: 'clic-chanceux', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const w = wallet(0);
+    const res = clickPet(c, w, cfg, () => 0.001); // rng bas : force le critique
+    expect(res.ok).toBe(true);
+    expect((res as { ok: true; events: SimEvent[] }).events[0]?.data?.crit).toBe(true);
+    expect(w.crumbs).toBe(cfg.click.baseCrumbsPerClick * cfg.click.critMultiplier);
+  });
+
+  it('la chance de critique cumulée est plafonnée à critChanceCap', () => {
+    const c = child();
+    c.skills = [
+      { skillId: 'clic-chanceux', state: 'owned', trainedSeconds: 0, level: 3, upgrading: false },
+      { skillId: 'souris-gamer', state: 'owned', trainedSeconds: 0, level: 3, upgrading: false },
+      { skillId: 'transcendance-tactile', state: 'owned', trainedSeconds: 0, level: 3, upgrading: false },
+    ];
+    const { critChance } = clickValue(c, cfg);
+    expect(critChance).toBeLessThanOrEqual(cfg.click.critChanceCap);
+  });
+
+  it('la Macro douteuse (auto-clicker) crédite des Miettes au fil du temps sans intervention', () => {
+    const c = child();
+    c.satiety = 100;
+    c.skills = [{ skillId: 'macro-douteuse', state: 'owned', trainedSeconds: 0, level: 1, upgrading: false }];
+    const w = wallet(0);
+    advanceSim(c, w, HOUR, cfg);
+    expect(w.crumbs).toBeGreaterThan(0);
   });
 });

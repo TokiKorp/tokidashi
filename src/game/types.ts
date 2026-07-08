@@ -43,7 +43,8 @@ export type SkillCategory =
   | 'efficiency'
   | 'conversion'
   | 'social'
-  | 'defense';
+  | 'defense'
+  | 'clicker';
 
 export interface SkillDef {
   id: string;
@@ -81,6 +82,12 @@ export interface SkillDef {
   eventWindowMultiplier?: number;
   /** Automatisation : ramasse le pot tout seul quand il est presque plein. */
   autoCollect?: boolean;
+  /** Clicker : Miettes supplémentaires par clic sur le Compagnon. */
+  crumbsPerClick?: number;
+  /** Clicker : chance (additive, 0-1) qu'un clic soit critique (×cfg.click.critMultiplier). */
+  clickCritChance?: number;
+  /** Clicker : clics automatiques par heure active (valeur moyenne, déterministe). */
+  autoClicksPerHour?: number;
 }
 
 export type SkillState = 'learning' | 'owned';
@@ -231,7 +238,8 @@ export type SimEventType =
   | 'event-started'
   | 'event-defended'
   | 'event-lost'
-  | 'event-boon';
+  | 'event-boon'
+  | 'pet-clicked';
 
 export interface SimEvent {
   type: SimEventType;

@@ -7,6 +7,7 @@ import { childCost, cosmeticById, foodById, skillById, turretCost } from './conf
 import { generateGenome } from './genome';
 import {
   applyFoodEffects,
+  clickValue,
   crumbCap,
   effectiveFoodCost,
   hatch,
@@ -117,6 +118,26 @@ export function play(c: CompanionState, cfg: GameConfig): ActionResult {
   c.mood = Math.min(100, c.mood + cfg.playMoodGain + mods.playMoodBonus);
   c.xp += cfg.xpPerPlay;
   return { ok: true, events: [] };
+}
+
+/**
+ * Cliquer sur le Compagnon : Miettes immédiates au portefeuille (pas au pot).
+ * Sans cooldown, sans XP — c'est le geste répétitif du clicker, pas le jeu (§ play).
+ */
+export function clickPet(
+  c: CompanionState,
+  wallet: WalletState,
+  cfg: GameConfig,
+  rng: () => number = Math.random,
+): ActionResult {
+  if (c.stage === 'egg') return { ok: false, reason: "L'œuf préfère être tapoté." };
+  if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
+  const { amount, critChance } = clickValue(c, cfg);
+  const crit = rng() < critChance;
+  const gain = crit ? amount * cfg.click.critMultiplier : amount;
+  wallet.crumbs += gain;
+  c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + gain;
+  return { ok: true, events: [{ type: 'pet-clicked', data: { amount: gain, crit } }] };
 }
 
 /** Ramasser les Miettes produites (le pot) vers le portefeuille. */

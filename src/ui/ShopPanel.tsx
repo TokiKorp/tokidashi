@@ -2,7 +2,7 @@
 // adoption de petits compagnons. Les cosmétiques s'affichent en pixels sur
 // le sprite ; les petits aident à la production de Miettes.
 
-import { childCost, turretCost } from '../game/config';
+import { childCost, turretAmmoCost, turretCost } from '../game/config';
 import { containerOf, ufoInterceptChance } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatCrumbs, formatTokens } from './format';
@@ -169,7 +169,20 @@ export function ShopPanel({ onClose }: Props) {
             Niveau {c.turretLevel ?? 0}/{cfg.turret.maxLevel} — {Math.round(ufoInterceptChance(c, cfg) * 100)}%
             de chances d'intercepter l'OVNI avant qu'il n'enlève un petit.
             N'agit que si des petits ont été adoptés.
+            {(c.turretLevel ?? 0) > 0 && (
+              <>
+                {' '}Munitions :{' '}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <PixelIcon grid={ICON_CRUMB} alt="" /> {turretAmmoCost(cfg, c.turretLevel ?? 0)}
+                </span>{' '}par tir, prélevées du portefeuille à chaque OVNI.
+              </>
+            )}
           </p>
+          {(c.turretLevel ?? 0) > 0 && game.wallet.crumbs < turretAmmoCost(cfg, c.turretLevel ?? 0) && (
+            <p className="panel-hint" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--danger)', fontWeight: 'bold' }}>
+              <PixelIcon grid={ICON_ALERT} alt="avertissement" /> Tourelle HORS LIGNE — pas assez de Miettes pour les munitions !
+            </p>
+          )}
           {(c.turretLevel ?? 0) >= cfg.turret.maxLevel ? (
             <p className="panel-hint" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <PixelIcon grid={ICON_SHIELD} alt="" /> Tourelle au niveau maximum !
