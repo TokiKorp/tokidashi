@@ -25,6 +25,8 @@ jobs:
   release:
     needs: bump
     if: ${{ needs.bump.outputs.new_tag != '' }}
+    permissions:
+      contents: write
     uses: ./.github/workflows/release.yml
     with:
       tag_name: ${{ needs.bump.outputs.new_tag }}
