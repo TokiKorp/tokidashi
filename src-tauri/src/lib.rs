@@ -6,14 +6,21 @@
 // verrouillé. Simple, robuste, et le coût d'un poll par seconde est nul.
 // Windows (WM_WTSSESSION_CHANGE) et Linux (logind/dbus) viendront ensuite.
 
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, PhysicalPosition};
+#[cfg(desktop)]
+use tauri::Manager;
+#[cfg(desktop)]
+use tauri::{Emitter, PhysicalPosition};
 
+#[cfg(desktop)]
 const LOCK_EVENT: &str = "tokidachi://lock-state";
 
 /// Place la fenêtre compagnon en bas à droite de l'écran OÙ EST LA SOURIS —
 /// c'est là que l'utilisateur regarde. Repli : l'écran de la fenêtre.
+#[cfg(desktop)]
 fn position_bottom_right(app: &tauri::App) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -83,6 +90,32 @@ mod session_lock {
     pub fn is_locked() -> bool {
         false
     }
+}
+
+/// Ré-affirme le niveau de fenêtre natif (au-dessus du plein écran, sous
+/// l'écran de veille) et le collection behavior. Les appels Cocoa doivent
+/// tourner sur le main thread — c'est pourquoi tout passe par
+/// `run_on_main_thread`, y compris l'appel initial du setup.
+#[cfg(target_os = "macos")]
+fn assert_overlay_level(window: &tauri::WebviewWindow) {
+    let window = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
+        use cocoa::base::id;
+        if let Ok(ns_window_ptr) = window.ns_window() {
+            let ns_window = ns_window_ptr as id;
+            unsafe {
+                let collection_behavior =
+                    NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
+                        | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary;
+                ns_window.setCollectionBehavior_(collection_behavior);
+                // NSPopUpMenuWindowLevel : au-dessus des apps plein écran, mais
+                // sous NSScreenSaverWindowLevel (1000) pour ne jamais passer
+                // devant l'écran de veille ou les dialogues système/verrouillage.
+                ns_window.setLevel_(101);
+            }
+        }
+    });
 }
 
 use std::path::PathBuf;
@@ -260,35 +293,28 @@ pub fn run() {
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
                 if let Some(window) = app.get_webview_window("main") {
-                    use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
-                    use cocoa::base::id;
-                    if let Ok(ns_window_ptr) = window.ns_window() {
-                        let ns_window = ns_window_ptr as id;
-                        unsafe {
-                            let collection_behavior = 
-                                NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces | 
-                                NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary;
-                            ns_window.setCollectionBehavior_(collection_behavior);
-                            ns_window.setLevel_(25); // NSMainMenuWindowLevel + 1
-                        }
-                    }
+                    assert_overlay_level(&window);
                 }
             }
 
-            let quit_i = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-            let show_i = MenuItem::with_id(app, "show", "Afficher", true, None::<&str>)?;
-            let hide_i = MenuItem::with_id(app, "hide", "Masquer", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+            #[cfg(desktop)]
+            {
+                let quit_i = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
+                let show_i = MenuItem::with_id(app, "show", "Afficher", true, None::<&str>)?;
+                let hide_i = MenuItem::with_id(app, "hide", "Masquer", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
 
-            let icon = app.default_window_icon().cloned().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::NotFound, "No default window icon found")
-            })?;
+                let icon = app.default_window_icon().cloned().ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "No default window icon found",
+                    )
+                })?;
 
-            let _tray = TrayIconBuilder::new()
-                .icon(icon)
-                .menu(&menu)
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
+                let _tray = TrayIconBuilder::new()
+                    .icon(icon)
+                    .menu(&menu)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
                         "quit" => {
                             app.exit(0);
                         }
@@ -296,6 +322,8 @@ pub fn run() {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
+                                #[cfg(target_os = "macos")]
+                                assert_overlay_level(&window);
                             }
                         }
                         "hide" => {
@@ -304,48 +332,60 @@ pub fn run() {
                             }
                         }
                         _ => {}
-                    }
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let is_visible = window.is_visible().unwrap_or(false);
-                            if is_visible {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let is_visible = window.is_visible().unwrap_or(false);
+                                if is_visible {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    #[cfg(target_os = "macos")]
+                                    assert_overlay_level(&window);
+                                }
                             }
                         }
-                    }
-                })
-                .build(app)?;
+                    })
+                    .build(app)?;
 
-            position_bottom_right(app);
-            let handle = app.handle().clone();
-            std::thread::spawn(move || {
-                let mut last = session_lock::is_locked();
-                let mut tick: u32 = 0;
-                loop {
-                    let locked = session_lock::is_locked();
-                    if locked != last {
-                        last = locked;
-                        let _ = handle.emit(LOCK_EVENT, locked);
-                    }
-                    // macOS perd parfois le niveau flottant après un changement
-                    // de Space / une app plein écran : on ré-affirme le premier
-                    // plan toutes les 5 s (idempotent, coût nul).
-                    tick += 1;
-                    if tick % 5 == 0 {
-                        if let Some(window) = handle.get_webview_window("main") {
-                            let _ = window.set_always_on_top(true);
-                            let _ = window.set_visible_on_all_workspaces(true);
+                position_bottom_right(app);
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let mut last = session_lock::is_locked();
+                    let mut tick: u32 = 0;
+                    loop {
+                        let locked = session_lock::is_locked();
+                        if locked != last {
+                            last = locked;
+                            let _ = handle.emit(LOCK_EVENT, locked);
                         }
+                        // macOS perd parfois le niveau flottant après un changement
+                        // de Space / une app plein écran : on ré-affirme le premier
+                        // plan toutes les 5 s (idempotent, coût nul).
+                        tick += 1;
+                        if tick % 5 == 0 {
+                            if let Some(window) = handle.get_webview_window("main") {
+                                #[cfg(target_os = "macos")]
+                                assert_overlay_level(&window);
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    let _ = window.set_always_on_top(true);
+                                    let _ = window.set_visible_on_all_workspaces(true);
+                                }
+                            }
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
-                }
-            });
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
