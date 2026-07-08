@@ -27,6 +27,7 @@ export function DevPanel({ onClose }: Props) {
     setProvider,
     setSelectedCli,
     unlockDevMode,
+    disableDevMode,
   } = useTokidachi();
   const provider = providerById(providerId);
   const unlimited = game.capacity.unlimited ?? false;
@@ -130,6 +131,13 @@ export function DevPanel({ onClose }: Props) {
               </div>
               <button className="btn-secondary" onClick={() => setLocked(!locked)}>
                 {locked ? 'Simuler le déverrouillage' : 'Simuler le verrouillage'}
+              </button>
+              <button 
+                className="btn-danger" 
+                style={{ marginTop: '8px', padding: '6px' }} 
+                onClick={disableDevMode}
+              >
+                🔒 Désactiver le mode Dev
               </button>
             </>
           ) : (

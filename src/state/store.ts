@@ -92,6 +92,7 @@ interface TokidachiStore {
   setProvider(providerId: string): void;
   setSelectedCli(cli: 'random' | 'agy' | 'codex' | 'claude'): void;
   unlockDevMode(key: string): void;
+  disableDevMode(): void;
 
   addTokensToBag(tokens: number, cliName: string): void;
   ensureTokensAvailable(cost: number): Promise<boolean>;
@@ -555,6 +556,19 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     } else {
       set({ notice: "Clé secrète incorrecte !" });
     }
+    void writeSave(makeSave(get()));
+  },
+
+  disableDevMode() {
+    const nextCfg = { ...get().cfg, simSpeed: 1 };
+    const nextGame = structuredClone(get().game);
+    nextGame.capacity.unlimited = false;
+    set({
+      devMode: false,
+      cfg: nextCfg,
+      game: nextGame,
+      notice: "Mode Dev désactivé !",
+    });
     void writeSave(makeSave(get()));
   },
 
