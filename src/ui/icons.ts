@@ -145,22 +145,6 @@ export const ICON_GEAR: Grid = [
   '............',
 ];
 
-/** Cœur (Santé / Vitalité). */
-export const ICON_HEART: Grid = [
-  '............',
-  '..oo....oo..',
-  '.oRRo..oRRo.',
-  'oRRRRooRRRRo',
-  'oRRwRRRRwRRo',
-  'oRRRRRRRRRRo',
-  '.oRRRRRRRRo.',
-  '..oRRRRRRo..',
-  '...oRRRRo...',
-  '....oRRo....',
-  '.....oo.....',
-  '............',
-];
-
 /** Éclair / énergie (PEA / investissement). */
 export const ICON_PEA: Grid = [
   '........oo..',
@@ -193,22 +177,6 @@ export const ICON_UPGRADE: Grid = [
   '............',
 ];
 
-/** Nuage / cloud. */
-export const ICON_CLOUD: Grid = [
-  '............',
-  '....oooo....',
-  '..ooCCCCoo..',
-  '.oCCCCCCCCo.',
-  'oCCCCCCCCCCo',
-  'oCCCCCCCCCCo',
-  '.ooooooooooo',
-  '............',
-  '............',
-  '............',
-  '............',
-  '............',
-];
-
 /** Livre — étude / apprentissage. */
 export const ICON_BOOK: Grid = [
   '............',
@@ -221,22 +189,6 @@ export const ICON_BOOK: Grid = [
   '.oTwwwwwTo..',
   '.oTwwwwwTo..',
   '.ooooooooo..',
-  '............',
-  '............',
-];
-
-/** Croix médicale — Kit de soin. */
-export const ICON_MEDKIT: Grid = [
-  '............',
-  '....oooo....',
-  '...oRRRRo...',
-  '..oRRRRRRo..',
-  '.oRRoooRRRo.',
-  '.oRRoRoRRRo.',
-  '.oRRoooRRRo.',
-  '..oRRRRRRo..',
-  '...oRRRRo...',
-  '....oooo....',
   '............',
   '............',
 ];
@@ -269,22 +221,6 @@ export const ICON_SHIELD: Grid = [
   '..oGGYGGGo..',
   '...oGGGGo...',
   '....oooo....',
-  '............',
-  '............',
-];
-
-/** Fusée — singularité / end-game. */
-export const ICON_ROCKET: Grid = [
-  '.....oo.....',
-  '....oMMo....',
-  '...oMMMMo...',
-  '..oMMwwMMo..',
-  '..oMMwwMMo..',
-  '..oMMMMMMo..',
-  '.oMMMMMMMo..',
-  'oRoMMMMoRoo.',
-  'oRRoooooRRo.',
-  '..oRRRRRo...',
   '............',
   '............',
 ];
