@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,3 +21,11 @@ jobs:
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    needs: bump
+    if: ${{ needs.bump.outputs.new_tag != '' }}
+    uses: ./.github/workflows/release.yml
+    with:
+      tag_name: ${{ needs.bump.outputs.new_tag }}
+    secrets: inherit

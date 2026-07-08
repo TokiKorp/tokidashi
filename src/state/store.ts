@@ -62,6 +62,9 @@ interface TokidachiStore {
   notice: string | null;
   report: ReturnReport | null;
   language: 'fr' | 'en';
+  notificationsEnabled: boolean;
+  notifyThingsDone: boolean;
+  notifyNeedsAttention: boolean;
 
   // Cloud properties
   backupId: string;
@@ -95,6 +98,9 @@ interface TokidachiStore {
   unlockDevMode(key: string): void;
   disableDevMode(): void;
   setLanguage(lang: 'fr' | 'en'): void;
+  setNotificationsEnabled(enabled: boolean): void;
+  setNotifyThingsDone(enabled: boolean): void;
+  setNotifyNeedsAttention(enabled: boolean): void;
 
   addTokensToBag(tokens: number, cliName: string): void;
   ensureTokensAvailable(cost: number): Promise<boolean>;
@@ -208,6 +214,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   notice: null,
   report: null,
   language: 'fr',
+  notificationsEnabled: true,
+  notifyThingsDone: true,
+  notifyNeedsAttention: true,
 
   backupId: '',
   cloudSyncEnabled: false,
@@ -233,6 +242,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         cloudSyncEnabled: save.cloudSyncEnabled ?? false,
         cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi-bb.bb-bbb.com',
         language: save.language ?? 'fr',
+        notificationsEnabled: save.notificationsEnabled ?? true,
+        notifyThingsDone: save.notifyThingsDone ?? true,
+        notifyNeedsAttention: save.notifyNeedsAttention ?? true,
         loaded: true,
       });
       if (!save.backupId) {
@@ -256,6 +268,156 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     baseline?.events.push(...events);
     const notice = eventNotice(cfg, events);
     set(notice ? { game: next, notice } : { game: next });
+
+    if (events.length > 0 && get().notificationsEnabled) {
+      const lang = get().language;
+      const companionName = next.companion?.name || 'Tokidachi';
+      for (const event of events) {
+        const isThingsDone = ['hatched', 'evolved', 'skill-learned', 'skill-upgraded', 'recovered', 'auto-collected', 'event-defended', 'event-boon'].includes(event.type);
+        const isNeedsAttention = ['got-hungry', 'got-sick', 'died', 'crumb-cap-reached', 'event-started', 'event-lost'].includes(event.type);
+
+        if ((isThingsDone && get().notifyThingsDone) || (isNeedsAttention && get().notifyNeedsAttention)) {
+          let title = '';
+          let body = '';
+          if (lang === 'fr') {
+            switch (event.type) {
+              case 'hatched':
+                title = '🐣 Éclosion !';
+                body = `${companionName} a éclos ! Viens faire sa connaissance.`;
+                break;
+              case 'evolved':
+                const stageLabel = cfg.stages[event.data?.stage as StageCode]?.label || String(event.data?.stage);
+                title = '🎉 Évolution !';
+                body = `${companionName} a évolué en ${stageLabel} !`;
+                break;
+              case 'skill-learned':
+                const skillLabel = skillById(cfg, String(event.data?.skillId))?.label || String(event.data?.skillId);
+                title = '📖 Compétence apprise !';
+                body = `${companionName} maîtrise désormais « ${skillLabel} ».`;
+                break;
+              case 'skill-upgraded':
+                const upSkillLabel = skillById(cfg, String(event.data?.skillId))?.label || String(event.data?.skillId);
+                title = '⭐ Compétence améliorée !';
+                body = `${companionName} a amélioré « ${upSkillLabel} » au niveau ${event.data?.level}.`;
+                break;
+              case 'recovered':
+                title = '💪 En pleine forme !';
+                body = `${companionName} s'est rétabli et n'est plus malade.`;
+                break;
+              case 'auto-collected':
+                title = '🫙 Majordome actif';
+                body = 'Le Majordome a ramassé le pot de miettes.';
+                break;
+              case 'event-defended':
+                const defEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Une menace';
+                title = '🛡️ Menace repoussée !';
+                body = `${defEventLabel} a été repoussé avec succès.`;
+                break;
+              case 'event-boon':
+                const boonEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Un ami';
+                title = '🦋 Visite amicale !';
+                body = `${boonEventLabel} est de passage.`;
+                break;
+              case 'got-hungry':
+                title = '🍽️ J\'ai faim !';
+                body = `${companionName} a faim et a besoin d'être nourri.`;
+                break;
+              case 'got-sick':
+                title = '😿 Malade...';
+                body = `${companionName} ne se sent pas bien et est tombé malade !`;
+                break;
+              case 'died':
+                title = '🪦 Triste nouvelle...';
+                body = `${companionName} s'est éteint...`;
+                break;
+              case 'crumb-cap-reached':
+                title = '🍞 Pot de miettes plein !';
+                body = 'Le contenant de miettes est plein, pense à le vider.';
+                break;
+              case 'event-started':
+                const threatLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Menace';
+                title = '⚠️ Alerte menace !';
+                body = `Un ${threatLabel} est arrivé ! Chasse-le vite !`;
+                break;
+              case 'event-lost':
+                const lostLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Pillard';
+                title = '😿 Dégâts subis';
+                body = `Le ${lostLabel} a causé des dégâts avant de partir.`;
+                break;
+            }
+          } else {
+            switch (event.type) {
+              case 'hatched':
+                title = '🐣 Hatched!';
+                body = `${companionName} has hatched! Come say hello.`;
+                break;
+              case 'evolved':
+                const stageLabel = cfg.stages[event.data?.stage as StageCode]?.label || String(event.data?.stage);
+                title = '🎉 Evolved!';
+                body = `${companionName} has evolved into a ${stageLabel}!`;
+                break;
+              case 'skill-learned':
+                const skillLabel = skillById(cfg, String(event.data?.skillId))?.label || String(event.data?.skillId);
+                title = '📖 Skill learned!';
+                body = `${companionName} has learned "${skillLabel}".`;
+                break;
+              case 'skill-upgraded':
+                const upSkillLabel = skillById(cfg, String(event.data?.skillId))?.label || String(event.data?.skillId);
+                title = '⭐ Skill upgraded!';
+                body = `${companionName} has upgraded "${upSkillLabel}" to level ${event.data?.level}.`;
+                break;
+              case 'recovered':
+                title = '💪 Fully recovered!';
+                body = `${companionName} has fully recovered and is no longer sick.`;
+                break;
+              case 'auto-collected':
+                title = '🫙 Butler active';
+                body = 'The Butler has collected the crumb jar.';
+                break;
+              case 'event-defended':
+                const defEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'A threat';
+                title = '🛡️ Threat repelled!';
+                body = `${defEventLabel} was successfully repelled.`;
+                break;
+              case 'event-boon':
+                const boonEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'A friend';
+                title = '🦋 Friendly visitor!';
+                body = `${boonEventLabel} paid a visit.`;
+                break;
+              case 'got-hungry':
+                title = '🍽️ Hungry!';
+                body = `${companionName} is hungry and needs food.`;
+                break;
+              case 'got-sick':
+                title = '😿 Sick...';
+                body = `${companionName} fell sick! Take care of them.`;
+                break;
+              case 'died':
+                title = '🪦 Sad news...';
+                body = `${companionName} has passed away.`;
+                break;
+              case 'crumb-cap-reached':
+                title = '🍞 Crumb jar full!';
+                body = 'The crumb jar is full, don\'t forget to collect them.';
+                break;
+              case 'event-started':
+                const threatLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Threat';
+                title = '⚠️ Threat alert!';
+                body = `A ${threatLabel} is here! Shoo it away!`;
+                break;
+              case 'event-lost':
+                const lostLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Raider';
+                title = '😿 Damage taken';
+                body = `The ${lostLabel} caused damage before leaving.`;
+                break;
+            }
+          }
+          if (title && body) {
+            void triggerNotification(title, body);
+          }
+        }
+      }
+    }
 
     if (events.some((e) => e.type === 'died')) {
       baseline = null;
@@ -559,6 +721,21 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
+  setNotificationsEnabled(notificationsEnabled) {
+    set({ notificationsEnabled });
+    void writeSave(makeSave(get()));
+  },
+
+  setNotifyThingsDone(notifyThingsDone) {
+    set({ notifyThingsDone });
+    void writeSave(makeSave(get()));
+  },
+
+  setNotifyNeedsAttention(notifyNeedsAttention) {
+    set({ notifyNeedsAttention });
+    void writeSave(makeSave(get()));
+  },
+
   unlockDevMode(key) {
     if (key.trim() === 'CLAUDIUSMAXIMUS') {
       set({ devMode: true, notice: "Mode Dev activé !" });
@@ -772,6 +949,34 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   },
 }));
 
+async function triggerNotification(title: string, body: string) {
+  const { isTauri } = await import('./persist');
+  if (isTauri()) {
+    try {
+      const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification');
+      let granted = await isPermissionGranted();
+      if (!granted) {
+        const permission = await requestPermission();
+        granted = permission === 'granted';
+      }
+      if (granted) {
+        sendNotification({ title, body });
+      }
+    } catch (err) {
+      console.error('Failed to dispatch Tauri notification', err);
+    }
+  } else if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body });
+    } else if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        new Notification(title, { body });
+      }
+    }
+  }
+}
+
 function makeSave(s: TokidachiStore) {
   return {
     version: 1 as const,
@@ -779,6 +984,9 @@ function makeSave(s: TokidachiStore) {
     providerId: s.providerId,
     selectedCli: s.selectedCli,
     devMode: s.devMode,
+    notificationsEnabled: s.notificationsEnabled,
+    notifyThingsDone: s.notifyThingsDone,
+    notifyNeedsAttention: s.notifyNeedsAttention,
     savedAtIso: new Date().toISOString(),
     backupId: s.backupId,
     cloudSyncEnabled: s.cloudSyncEnabled,

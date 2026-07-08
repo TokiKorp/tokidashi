@@ -31,6 +31,12 @@ export function DevPanel({ onClose }: Props) {
     disableDevMode,
     language,
     setLanguage,
+    notificationsEnabled,
+    notifyThingsDone,
+    notifyNeedsAttention,
+    setNotificationsEnabled,
+    setNotifyThingsDone,
+    setNotifyNeedsAttention,
   } = useTokidachi();
   const provider = providerById(providerId);
   const unlimited = game.capacity.unlimited ?? false;
@@ -135,6 +141,44 @@ export function DevPanel({ onClose }: Props) {
               )}
             </>
           )}
+        </section>
+
+        <section>
+          <h3>{t.notifications}</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9em' }}>
+              <input
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={(e) => setNotificationsEnabled(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              {t.notifications_enabled}
+            </label>
+            
+            {notificationsEnabled && (
+              <div style={{ paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '1px solid #444', marginTop: '4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85em', color: '#ccc' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyThingsDone}
+                    onChange={(e) => setNotifyThingsDone(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {t.notify_things_done}
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85em', color: '#ccc' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyNeedsAttention}
+                    onChange={(e) => setNotifyNeedsAttention(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {t.notify_needs_attention}
+                </label>
+              </div>
+            )}
+          </div>
         </section>
 
         <section>

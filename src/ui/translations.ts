@@ -27,6 +27,10 @@ export const TRANSLATIONS = {
     secret_key: "Clé secrète...",
     activate: "Activer",
     activate_dev_mode_label: "Activer le mode Dev :",
+    notifications: "Notifications macOS",
+    notifications_enabled: "Activer les notifications",
+    notify_things_done: "Choses accomplies (évolution, étude...)",
+    notify_needs_attention: "Attention requise (faim, maladie, jarre pleine...)",
     
     // App.tsx
     wallet_tooltip: "🪙 ta capacité IA (DEV : simulée) · 🍞 ses Miettes à lui",
@@ -63,6 +67,10 @@ export const TRANSLATIONS = {
     secret_key: "Secret key...",
     activate: "Activate",
     activate_dev_mode_label: "Activate Dev Mode:",
+    notifications: "macOS Notifications",
+    notifications_enabled: "Enable notifications",
+    notify_things_done: "Things accomplished (evolution, study...)",
+    notify_needs_attention: "Needs attention (hunger, sickness, jar full...)",
 
     // App.tsx
     wallet_tooltip: "🪙 your AI capacity (DEV: simulated) · 🍞 their own Crumbs",

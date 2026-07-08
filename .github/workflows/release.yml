@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
 
 jobs:
   validate-rust-linux:
@@ -65,8 +70,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Tokidachi ${{ github.ref_name }}'
+          tagName: ${{ inputs.tag_name || github.ref_name }}
+          releaseName: 'Tokidachi ${{ inputs.tag_name || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
@@ -85,7 +90,7 @@ jobs:
           fi
 
           # Extract version from tag (e.g., v0.1.0 -> 0.1.0)
-          TAG="${{ github.ref_name }}"
+          TAG="${{ inputs.tag_name || github.ref_name }}"
           VERSION="${TAG#v}"
           echo "Releasing version: $VERSION"
 

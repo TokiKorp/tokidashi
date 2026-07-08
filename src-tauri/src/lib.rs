@@ -6,9 +6,9 @@
 // verrouillé. Simple, robuste, et le coût d'un poll par seconde est nul.
 // Windows (WM_WTSSESSION_CHANGE) et Linux (logind/dbus) viendront ensuite.
 
-use tauri::{Emitter, Manager, PhysicalPosition};
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton};
+use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager, PhysicalPosition};
 
 const LOCK_EVENT: &str = "tokidachi://lock-state";
 
@@ -111,15 +111,21 @@ fn find_binary(name: &str) -> PathBuf {
     match name {
         "agy" => {
             let p = PathBuf::from(&home).join(".local/bin/agy");
-            if p.exists() { return p; }
+            if p.exists() {
+                return p;
+            }
         }
         "codex" => {
             let p = PathBuf::from(&home).join(".nvm/versions/node/v24.15.0/bin/codex");
-            if p.exists() { return p; }
+            if p.exists() {
+                return p;
+            }
         }
         "claude" => {
             let p = PathBuf::from(&home).join(".nvm/versions/node/v24.15.0/bin/claude");
-            if p.exists() { return p; }
+            if p.exists() {
+                return p;
+            }
         }
         _ => {}
     }
@@ -131,7 +137,7 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
     tokio::task::spawn_blocking(move || {
         let binary_path = find_binary(&cli_name);
         let mut cmd = Command::new(&binary_path);
-        
+
         match cli_name.as_str() {
             "agy" => {
                 cmd.arg("--print").arg(&prompt);
@@ -152,7 +158,7 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
                 };
             }
         }
-        
+
         cmd.env("PAGER", "cat");
 
         match cmd.output() {
@@ -161,16 +167,17 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
                     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                     let mut response = stdout.clone();
                     let mut tokens_consumed = 0;
-                    
+
                     if cli_name == "codex" {
                         if let Some(pos) = stdout.find("tokens used") {
                             let token_section = &stdout[pos + "tokens used".len()..];
-                            let digits: String = token_section.chars().filter(|c| c.is_digit(10)).collect();
+                            let digits: String =
+                                token_section.chars().filter(|c| c.is_digit(10)).collect();
                             if let Ok(parsed) = digits.parse::<u32>() {
                                 tokens_consumed = parsed;
                             }
                         }
-                        
+
                         if let Some(codex_pos) = stdout.find("codex\n") {
                             let start = codex_pos + "codex\n".len();
                             let end = stdout.find("tokens used").unwrap_or(stdout.len());
@@ -185,7 +192,7 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
                             }
                         }
                     }
-                    
+
                     if tokens_consumed == 0 {
                         let base_tokens = match cli_name.as_str() {
                             "agy" => 12000,
@@ -197,7 +204,7 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
                         let resp_tokens = response.len() as u32 / 4;
                         tokens_consumed = base_tokens + prompt_tokens + resp_tokens;
                     }
-                    
+
                     CliRunResult {
                         response: response.trim().to_string(),
                         cli_used: cli_name,
@@ -212,21 +219,25 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
                         cli_used: cli_name,
                         tokens_consumed: 0,
                         success: false,
-                        error: Some(format!("Exit code {}: {}", output.status.code().unwrap_or(-1), stderr)),
+                        error: Some(format!(
+                            "Exit code {}: {}",
+                            output.status.code().unwrap_or(-1),
+                            stderr
+                        )),
                     }
                 }
             }
-            Err(e) => {
-                CliRunResult {
-                    response: String::new(),
-                    cli_used: cli_name,
-                    tokens_consumed: 0,
-                    success: false,
-                    error: Some(e.to_string()),
-                }
-            }
+            Err(e) => CliRunResult {
+                response: String::new(),
+                cli_used: cli_name,
+                tokens_consumed: 0,
+                success: false,
+                error: Some(e.to_string()),
+            },
         }
-    }).await.unwrap_or_else(|e| CliRunResult {
+    })
+    .await
+    .unwrap_or_else(|e| CliRunResult {
         response: String::new(),
         cli_used: cli_name,
         tokens_consumed: 0,
@@ -238,6 +249,7 @@ async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![run_cli_command])
