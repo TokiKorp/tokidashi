@@ -57,6 +57,8 @@ interface TokidachiStore {
   backupId: string;
   cloudSyncEnabled: boolean;
   cloudServerUrl: string;
+  accountPseudo: string | null;
+  authToken: string | null;
 
   init(): Promise<void>;
   tick(dtSeconds: number): void;
@@ -100,8 +102,12 @@ interface TokidachiStore {
   setCloudSyncEnabled(enabled: boolean): void;
   setCloudServerUrl(url: string): void;
   regenerateBackupId(): void;
+  adoptBackupId(id: string): void;
   triggerCloudSync(): Promise<boolean>;
   restoreFromCloud(backupId: string): Promise<boolean>;
+  register(pseudo: string, password: string): Promise<{ ok: boolean; error?: string }>;
+  login(pseudo: string, password: string): Promise<{ ok: boolean; serverBackupId?: string | null; error?: string }>;
+  logout(): void;
 
   // Panneau dev
   setSimSpeed(x: number): void;
@@ -205,6 +211,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   backupId: '',
   cloudSyncEnabled: false,
   cloudServerUrl: 'https://tokidachi.bb-bbb.com',
+  accountPseudo: null,
+  authToken: null,
 
   async init() {
     const save = await loadSave();
@@ -228,6 +236,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         backupId,
         cloudSyncEnabled: save.cloudSyncEnabled ?? false,
         cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi.bb-bbb.com',
+        accountPseudo: save.accountPseudo ?? null,
+        authToken: save.authToken ?? null,
         language: save.language ?? 'fr',
         notificationsEnabled: save.notificationsEnabled ?? true,
         notifyThingsDone: save.notifyThingsDone ?? true,
@@ -236,6 +246,20 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       });
       if (!save.backupId) {
         void writeSave(makeSave(get()));
+      }
+      if (save.authToken) {
+        void (async () => {
+          try {
+            const url = `${get().cloudServerUrl.replace(/\/$/, '')}/api/me`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${save.authToken}` } });
+            if (res.status === 401 && get().authToken === save.authToken) {
+              set({ authToken: null, accountPseudo: null });
+              void writeSave(makeSave(get()));
+            }
+          } catch (err) {
+            console.error('Tokidachi: session check failed', err);
+          }
+        })();
       }
     } else {
       set({
@@ -919,18 +943,25 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
+  adoptBackupId(id) {
+    set({ backupId: id });
+    void writeSave(makeSave(get()));
+  },
+
   async triggerCloudSync() {
-    const { backupId, cloudServerUrl } = get();
+    const { backupId, cloudServerUrl, authToken } = get();
     if (!backupId || !cloudServerUrl) return false;
-    
+
     try {
       const url = `${cloudServerUrl.replace(/\/$/, '')}/api/sync`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           backupId,
-          saveData: makeSave(get()),
+          saveData: { ...makeSave(get()), authToken: undefined },
           submitToLeaderboard: true,
         }),
       });
@@ -942,14 +973,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   },
 
   async restoreFromCloud(targetBackupId) {
-    const { cloudServerUrl } = get();
+    const { cloudServerUrl, authToken, accountPseudo } = get();
     if (!targetBackupId || !cloudServerUrl) return false;
-    
+
     try {
       const url = `${cloudServerUrl.replace(/\/$/, '')}/api/restore/${targetBackupId}`;
-      const res = await fetch(url);
+      const headers: Record<string, string> = {};
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
+      const res = await fetch(url, { headers });
       if (!res.ok) return false;
-      
+
       const data = await res.json();
       if (data && data.saveData) {
         const saveData = data.saveData;
@@ -963,13 +996,15 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
           devMode,
           cfg,
           backupId: targetBackupId,
+          authToken,
+          accountPseudo,
           cloudSyncEnabled: saveData.cloudSyncEnabled ?? true,
           cloudServerUrl: saveData.cloudServerUrl ?? cloudServerUrl,
           language: saveData.language ?? 'fr',
           reaction: null,
           notice: "Sauvegarde restaurée !",
         });
-        
+
         void writeSave(makeSave(get()));
         return true;
       }
@@ -978,6 +1013,71 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       console.error('Tokidachi: Restore error', err);
       return false;
     }
+  },
+
+  async register(pseudo, password) {
+    const { cloudServerUrl, backupId } = get();
+    try {
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/register`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pseudo, password, backupId: backupId || undefined }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { ok: false, error: data?.error ?? 'Erreur inconnue' };
+      }
+      set({
+        authToken: data.token,
+        accountPseudo: data.pseudo,
+        cloudSyncEnabled: true,
+      });
+      void writeSave(makeSave(get()));
+      void get().triggerCloudSync();
+      return { ok: true };
+    } catch (err) {
+      console.error('Tokidachi: Register error', err);
+      return { ok: false, error: 'Erreur réseau' };
+    }
+  },
+
+  async login(pseudo, password) {
+    const { cloudServerUrl } = get();
+    try {
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/login`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pseudo, password }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { ok: false, error: data?.error ?? 'Erreur inconnue' };
+      }
+      set({
+        authToken: data.token,
+        accountPseudo: data.pseudo,
+        cloudSyncEnabled: true,
+      });
+      void writeSave(makeSave(get()));
+      return { ok: true, serverBackupId: data.backupId ?? null };
+    } catch (err) {
+      console.error('Tokidachi: Login error', err);
+      return { ok: false, error: 'Erreur réseau' };
+    }
+  },
+
+  logout() {
+    const { cloudServerUrl, authToken } = get();
+    if (authToken && cloudServerUrl) {
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/logout`;
+      fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${authToken}` } }).catch((err) => {
+        console.warn('Tokidachi: logout request failed', err);
+      });
+    }
+    set({ authToken: null, accountPseudo: null, cloudSyncEnabled: false });
+    void writeSave(makeSave(get()));
   },
 
   succeed(childIndex, newName) {
@@ -1182,6 +1282,8 @@ function makeSave(s: TokidachiStore) {
     backupId: s.backupId,
     cloudSyncEnabled: s.cloudSyncEnabled,
     cloudServerUrl: s.cloudServerUrl,
+    accountPseudo: s.accountPseudo ?? undefined,
+    authToken: s.authToken ?? undefined,
     language: s.language,
   };
 }
