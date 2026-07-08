@@ -134,7 +134,9 @@ fn find_binary(name: &str) -> PathBuf {
 
 #[tauri::command]
 async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
+    let cli_name_for_job = cli_name.clone();
     tokio::task::spawn_blocking(move || {
+        let cli_name = cli_name_for_job;
         let binary_path = find_binary(&cli_name);
         let mut cmd = Command::new(&binary_path);
 
