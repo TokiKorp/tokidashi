@@ -19,6 +19,8 @@ export interface SaveData {
   cloudSyncEnabled?: boolean;
   cloudServerUrl?: string;
   language?: 'fr' | 'en';
+  accountPseudo?: string;
+  authToken?: string;
 }
 
 const STORE_FILE = 'tokidachi.json';
@@ -59,12 +61,14 @@ export async function writeSave(data: SaveData): Promise<void> {
     // Background cloud sync
     if (data.cloudSyncEnabled && data.backupId && data.cloudServerUrl) {
       const url = `${data.cloudServerUrl.replace(/\/$/, '')}/api/sync`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (data.authToken) headers.Authorization = `Bearer ${data.authToken}`;
       fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           backupId: data.backupId,
-          saveData: data,
+          saveData: { ...data, authToken: undefined },
           submitToLeaderboard: true,
         }),
       }).catch((err) => {
