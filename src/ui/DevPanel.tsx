@@ -56,7 +56,7 @@ export function DevPanel({ onClose }: Props) {
           
           {/* Language Selector */}
           <div style={{ margin: '0 0 12px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.language}</label>
+            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.language}</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className={language === 'fr' ? 'btn-primary' : 'btn-secondary'}
@@ -76,7 +76,7 @@ export function DevPanel({ onClose }: Props) {
           </div>
 
           <div style={{ margin: '8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.provider_type}</label>
+            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.provider_type}</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className={providerId === 'dev' ? 'btn-primary' : 'btn-secondary'}
@@ -97,7 +97,7 @@ export function DevPanel({ onClose }: Props) {
 
           {providerId === 'cli' && (
             <div style={{ margin: '12px 0 8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-              <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.active_cli_client}</label>
+              <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.active_cli_client}</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                 {(['random', 'agy', 'codex', 'claude'] as const).map((cli) => (
                   <button
@@ -147,37 +147,84 @@ export function DevPanel({ onClose }: Props) {
 
         <section>
           <h3>{t.notifications}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9em' }}>
-              <input
-                type="checkbox"
-                checked={notificationsEnabled}
-                onChange={(e) => setNotificationsEnabled(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              {t.notifications_enabled}
-            </label>
-            
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Pixel toggle: Notifications enabled */}
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+            >
+              <div style={{
+                width: '32px', height: '16px',
+                background: notificationsEnabled ? 'var(--mint-dark)' : '#ccc',
+                border: '2px solid var(--ink)',
+                borderRadius: '2px',
+                position: 'relative',
+                transition: 'background 0.15s',
+                imageRendering: 'pixelated',
+                flexShrink: 0,
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: '1px',
+                  left: notificationsEnabled ? '13px' : '1px',
+                  width: '10px', height: '10px',
+                  background: 'var(--ink)',
+                  transition: 'left 0.15s',
+                }} />
+              </div>
+              <span style={{ fontSize: '0.9em', color: 'var(--ink)', userSelect: 'none' }}>{t.notifications_enabled}</span>
+            </div>
+
             {notificationsEnabled && (
-              <div style={{ paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '1px solid #444', marginTop: '4px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85em', color: '#ccc' }}>
-                  <input
-                    type="checkbox"
-                    checked={notifyThingsDone}
-                    onChange={(e) => setNotifyThingsDone(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {t.notify_things_done}
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85em', color: '#ccc' }}>
-                  <input
-                    type="checkbox"
-                    checked={notifyNeedsAttention}
-                    onChange={(e) => setNotifyNeedsAttention(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {t.notify_needs_attention}
-                </label>
+              <div style={{ paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '10px', borderLeft: '3px solid var(--ink-soft)', marginTop: '2px' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+                  onClick={() => setNotifyThingsDone(!notifyThingsDone)}
+                >
+                  <div style={{
+                    width: '32px', height: '16px',
+                    background: notifyThingsDone ? 'var(--mint-dark)' : '#ccc',
+                    border: '2px solid var(--ink)',
+                    borderRadius: '2px',
+                    position: 'relative',
+                    transition: 'background 0.15s',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '1px',
+                      left: notifyThingsDone ? '13px' : '1px',
+                      width: '10px', height: '10px',
+                      background: 'var(--ink)',
+                      transition: 'left 0.15s',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.85em', color: 'var(--ink-soft)', userSelect: 'none' }}>{t.notify_things_done}</span>
+                </div>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+                  onClick={() => setNotifyNeedsAttention(!notifyNeedsAttention)}
+                >
+                  <div style={{
+                    width: '32px', height: '16px',
+                    background: notifyNeedsAttention ? 'var(--mint-dark)' : '#ccc',
+                    border: '2px solid var(--ink)',
+                    borderRadius: '2px',
+                    position: 'relative',
+                    transition: 'background 0.15s',
+                    flexShrink: 0,
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '1px',
+                      left: notifyNeedsAttention ? '13px' : '1px',
+                      width: '10px', height: '10px',
+                      background: 'var(--ink)',
+                      transition: 'left 0.15s',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.85em', color: 'var(--ink-soft)', userSelect: 'none' }}>{t.notify_needs_attention}</span>
+                </div>
               </div>
             )}
           </div>
@@ -206,15 +253,32 @@ export function DevPanel({ onClose }: Props) {
                   ? (language === 'fr' ? 'Simuler le déverrouillage' : 'Simulate Unlock') 
                   : (language === 'fr' ? 'Simuler le verrouillage' : 'Simulate Lock')}
               </button>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9em', marginTop: '8px', marginBottom: '8px', color: '#fff' }}>
-                <input
-                  type="checkbox"
-                  checked={disableEnemies}
-                  onChange={(e) => setDisableEnemies(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
-                />
-                {language === 'fr' ? 'Désactiver les ennemis (Pigeon, fourmis, etc.)' : 'Disable enemies (Pigeon, ants, etc.)'}
-              </label>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginTop: '8px', marginBottom: '8px' }}
+                onClick={() => setDisableEnemies(!disableEnemies)}
+              >
+                <div style={{
+                  width: '32px', height: '16px',
+                  background: disableEnemies ? 'var(--mint-dark)' : '#ccc',
+                  border: '2px solid var(--ink)',
+                  borderRadius: '2px',
+                  position: 'relative',
+                  transition: 'background 0.15s',
+                  flexShrink: 0,
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    top: '1px',
+                    left: disableEnemies ? '13px' : '1px',
+                    width: '10px', height: '10px',
+                    background: 'var(--ink)',
+                    transition: 'left 0.15s',
+                  }} />
+                </div>
+                <span style={{ fontSize: '0.9em', color: 'var(--ink)', userSelect: 'none' }}>
+                  {language === 'fr' ? 'Désactiver les ennemis (Pigeon, fourmis…)' : 'Disable enemies (Pigeon, ants…)'}
+                </span>
+              </div>
               <button 
                 className="btn-danger" 
                 style={{ marginTop: '8px', padding: '6px' }} 
@@ -240,7 +304,7 @@ export function DevPanel({ onClose }: Props) {
               </div>
               
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#aaa' }}>{t.activate_dev_mode_label}</label>
+                <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.activate_dev_mode_label}</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
                     type="password"
