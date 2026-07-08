@@ -60,6 +60,10 @@ export const TRANSLATIONS = {
     acct_pseudo_placeholder: "Pseudo (3-20 caractères)",
     acct_password_placeholder: "Mot de passe (8+ caractères)",
     acct_loading: "Chargement...",
+
+    garden_panel: "Jardin",
+    camp_panel: "Feu de camp",
+    pool_panel: "La Mare",
   },
   en: {
     settings: "Settings",
@@ -120,5 +124,9 @@ export const TRANSLATIONS = {
     acct_pseudo_placeholder: "Username (3-20 characters)",
     acct_password_placeholder: "Password (8+ characters)",
     acct_loading: "Loading...",
+
+    garden_panel: "Garden",
+    camp_panel: "Fire Camp",
+    pool_panel: "The Pool",
   }
 };

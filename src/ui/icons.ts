@@ -256,3 +256,94 @@ export const ICON_ALERT: Grid = [
   '............',
   '............',
 ];
+
+export const ICON_SAPLING: Grid = [
+  '............',
+  '.....oo.....',
+  '....oGGo....',
+  '...oGGGGo...',
+  '....oGGo....',
+  '.....oo.....',
+  '.....TT.....',
+  '.....TT.....',
+  '....oTTo....',
+  '............',
+  '............',
+  '............',
+];
+
+export const ICON_WOOD: Grid = [
+  '............',
+  '............',
+  '.oooooooooo.',
+  '.oTTTTTTTTo.',
+  '.oTTTTTTTTo.',
+  '.oTBBBBBBTo.',
+  '.oTTTTTTTTo.',
+  '.oTTTTTTTTo.',
+  '.oooooooooo.',
+  '............',
+  '............',
+  '............',
+];
+
+export const ICON_FIRE: Grid = [
+  '............',
+  '.....oo.....',
+  '....oYYo....',
+  '...oRRYYo...',
+  '...oRRRRo...',
+  '..oRRRRRRo..',
+  '..oRRRRRRo..',
+  '...oRRRRo...',
+  '....oRRo....',
+  '.....oo.....',
+  '............',
+  '............',
+];
+
+export const ICON_FISH: Grid = [
+  '............',
+  '............',
+  '.......oo...',
+  '......oCCoo.',
+  '....oCCCCCCo',
+  '...oCCwCCCCo',
+  '....oCCCCCCo',
+  '......oCCoo.',
+  '.......oo...',
+  '............',
+  '............',
+  '............',
+];
+
+export const ICON_ROD: Grid = [
+  '..........Y.',
+  '.........T..',
+  '........T...',
+  '.......T....',
+  '......T.....',
+  '.....T......',
+  '....T.......',
+  '...T........',
+  '..T.........',
+  '.T..........',
+  'T...........',
+  '............',
+];
+
+/** Cadenas — parcelle/emplacement verrouillé. */
+export const ICON_LOCK: Grid = [
+  '............',
+  '...oooo.....',
+  '..o....o....',
+  '..o....o....',
+  '..o....o....',
+  '.oooooooo...',
+  '.oYYYYYYo...',
+  '.oYYoYYYo...',
+  '.oYYYYYYo...',
+  '.oYYYYYYo...',
+  '.oooooooo...',
+  '............',
+];

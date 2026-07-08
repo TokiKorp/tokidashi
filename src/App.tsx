@@ -7,20 +7,23 @@ import { containerOf, crumbCap, crumbRatePerHour, visibleState } from './game/si
 import { PetStage } from './render/PetStage';
 import { initSessionListeners } from './state/session';
 import { startGameLoop, useTokidachi } from './state/store';
+import { CampPanel } from './ui/CampPanel';
 import { DragBar } from './ui/Chrome';
 import { DevPanel } from './ui/DevPanel';
 import { FeedMenu } from './ui/FeedMenu';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './ui/format';
+import { GardenPanel } from './ui/GardenPanel';
 import { Gauge } from './ui/Gauge';
-import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE, ICON_TOKEN, ICON_CRUMB, ICON_GEAR, ICON_BOOK } from './ui/icons';
+import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE, ICON_TOKEN, ICON_CRUMB, ICON_GEAR, ICON_BOOK, ICON_SAPLING, ICON_FIRE, ICON_ROD } from './ui/icons';
 import { PixelIcon } from './ui/PixelIcon';
+import { PoolPanel } from './ui/PoolPanel';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
 import { ShopPanel } from './ui/ShopPanel';
 import { SkillPanel } from './ui/SkillPanel';
 import { CloudPanel } from './ui/CloudPanel';
 import { TRANSLATIONS } from './ui/translations';
 
-type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | null;
+type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | 'garden' | 'camp' | 'pool' | null;
 
 export default function App() {
   const store = useTokidachi();
@@ -80,6 +83,9 @@ export default function App() {
   const learning = c.skills.find((sp) => sp.state === 'learning');
   const learningDef = learning ? skillById(cfg, learning.skillId) : undefined;
   const jarCap = crumbCap(c, cfg);
+  const gardenUnlocked = game.prestigeSkills?.includes('unlock-garden') ?? false;
+  const campUnlocked = game.prestigeSkills?.includes('unlock-camp') ?? false;
+  const poolUnlocked = game.prestigeSkills?.includes('unlock-pool') ?? false;
 
   return (
     <div className="app">
@@ -207,6 +213,42 @@ export default function App() {
               >
                 <PixelIcon grid={ICON_SHOP} alt="" /> Boutique
               </button>
+              {gardenUnlocked && (
+                <button
+                  className="btn-secondary btn-mini"
+                  style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                  onClick={() => {
+                    setPanel('garden');
+                    setMenuOpen(false);
+                  }}
+                >
+                  <PixelIcon grid={ICON_SAPLING} alt="" /> Jardin
+                </button>
+              )}
+              {campUnlocked && (
+                <button
+                  className="btn-secondary btn-mini"
+                  style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                  onClick={() => {
+                    setPanel('camp');
+                    setMenuOpen(false);
+                  }}
+                >
+                  <PixelIcon grid={ICON_FIRE} alt="" /> Feu de camp
+                </button>
+              )}
+              {poolUnlocked && (
+                <button
+                  className="btn-secondary btn-mini"
+                  style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                  onClick={() => {
+                    setPanel('pool');
+                    setMenuOpen(false);
+                  }}
+                >
+                  <PixelIcon grid={ICON_ROD} alt="" /> La Mare
+                </button>
+              )}
               <button
                 className="btn-secondary btn-mini"
                 style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
@@ -298,6 +340,21 @@ export default function App() {
               <button className="btn-primary btn-icon" title="Boutique" onClick={() => setPanel('shop')}>
                 <PixelIcon grid={ICON_SHOP} alt="Boutique" />
               </button>
+              {gardenUnlocked && (
+                <button className="btn-primary btn-icon" title={t.garden_panel} onClick={() => setPanel('garden')}>
+                  <PixelIcon grid={ICON_SAPLING} alt={t.garden_panel} />
+                </button>
+              )}
+              {campUnlocked && (
+                <button className="btn-primary btn-icon" title={t.camp_panel} onClick={() => setPanel('camp')}>
+                  <PixelIcon grid={ICON_FIRE} alt={t.camp_panel} />
+                </button>
+              )}
+              {poolUnlocked && (
+                <button className="btn-primary btn-icon" title={t.pool_panel} onClick={() => setPanel('pool')}>
+                  <PixelIcon grid={ICON_ROD} alt={t.pool_panel} />
+                </button>
+              )}
             </nav>
           </>
         )}
@@ -317,6 +374,9 @@ export default function App() {
       {panel === 'shop' && <ShopPanel onClose={() => setPanel(null)} />}
       {panel === 'dev' && <DevPanel onClose={() => setPanel(null)} />}
       {panel === 'cloud' && <CloudPanel onClose={() => setPanel(null)} />}
+      {panel === 'garden' && gardenUnlocked && <GardenPanel onClose={() => setPanel(null)} />}
+      {panel === 'camp' && campUnlocked && <CampPanel onClose={() => setPanel(null)} />}
+      {panel === 'pool' && poolUnlocked && <PoolPanel onClose={() => setPanel(null)} />}
       {notice && <div className="toast">{notice}</div>}
     </div>
   );

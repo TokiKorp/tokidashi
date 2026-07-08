@@ -77,9 +77,20 @@ export function feed(
   capacity: CapacityGauge,
   food: FoodDef,
   cfg: GameConfig,
+  resources?: { crumbFish: number },
 ): ActionResult {
   if (c.stage === 'egg') return { ok: false, reason: 'Un œuf ne mange pas.' };
   if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
+
+  if (food.resource === 'crumbFish') {
+    if (!resources || resources.crumbFish < 1) {
+      return { ok: false, reason: 'Pas de Poisson-miette en stock.' };
+    }
+    resources.crumbFish -= 1;
+    applyFoodEffects(c, cfg, food.id);
+    c.xp += cfg.xpPerFeed;
+    return { ok: true, events: [] };
+  }
 
   const cost = effectiveFoodCost(food, skillModifiers(c, cfg), c.foodHeat[food.id] ?? 0);
   if (food.currency === 'crumbs') {
@@ -369,7 +380,9 @@ export function foodAffordable(
   wallet: WalletState,
   capacity: CapacityGauge,
   cfg: GameConfig,
+  resources?: { crumbFish: number },
 ): boolean {
+  if (food.resource === 'crumbFish') return (resources?.crumbFish ?? 0) >= 1;
   const cost = effectiveFoodCost(food, skillModifiers(c, cfg), c.foodHeat[food.id] ?? 0);
   return food.currency === 'crumbs'
     ? wallet.crumbs >= cost

@@ -23,11 +23,23 @@ import {
   tapEgg as tapEggAction,
   upgradeContainer as upgradeContainerAction,
 } from '../game/actions';
-import { DEFAULT_CONFIG, eventById, foodById, skillById, PRESTIGE_SKILLS, type GameConfig } from '../game/config';
+import { DEFAULT_CONFIG, eventById, foodById, prestigeSkillBlocked, skillById, PRESTIGE_SKILLS, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
+import {
+  advanceOutpost,
+  buyCompetenceNode as buyCompetenceNodeAction,
+  buyDecoration as buyDecorationAction,
+  castResolve as castResolveAction,
+  freshOutpost,
+  harvestTree as harvestTreeAction,
+  plantSapling as plantSaplingAction,
+  sellCrumbFish as sellCrumbFishAction,
+  startCooking as startCookingAction,
+  stokeFire as stokeFireAction,
+} from '../game/outpost';
 import { moodBucket, reactionTier } from '../game/reactions';
 import { advanceSim, defendEvent, passiveWalletIncome, scheduleNextEvent, effectiveFoodCost, skillModifiers, upgradeCost } from '../game/sim';
-import type { GameState, SimEvent, StageCode } from '../game/types';
+import type { GameState, OutpostGame, SimEvent, StageCode } from '../game/types';
 import { clearSave, loadSave, writeSave } from './persist';
 
 export interface ReactionBubble {
@@ -47,6 +59,7 @@ interface TokidachiStore {
   reaction: ReactionBubble | null;
   notice: string | null;
   clickFx: { amount: number; crit: boolean; seq: number } | null;
+  poolCatch: { speciesId: string; tier: number; lost: boolean; doubled: boolean; yieldFish: number; seq: number } | null;
   language: 'fr' | 'en';
   notificationsEnabled: boolean;
   notifyThingsDone: boolean;
@@ -84,6 +97,15 @@ interface TokidachiStore {
   setLocked(locked: boolean): void;
   dismissNotice(): void;
   dismissReaction(): void;
+
+  plantSapling(plotIdx: number): void;
+  harvestTree(plotIdx: number): void;
+  stokeFire(count: number): void;
+  startCooking(speciesId: string, count: number): void;
+  sellCrumbFish(count: number): void;
+  buyDecoration(id: string): void;
+  buyCompetenceNode(game: OutpostGame, nodeId: string): void;
+  castResolve(hit: boolean): void;
 
   setProvider(providerId: string): void;
   setSelectedCli(cli: 'random' | 'agy' | 'codex' | 'claude'): void;
@@ -126,6 +148,7 @@ function freshGame(cfg: GameConfig): GameState {
     bornAtIso: null,
     prestigePoints: 0,
     prestigeSkills: [],
+    outpost: freshOutpost(),
   };
 }
 
@@ -157,6 +180,7 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
   game.capacity.tokenBag ??= 0;
   game.prestigePoints ??= 0;
   game.prestigeSkills ??= [];
+  game.outpost ??= freshOutpost();
   return game;
 }
 
@@ -181,6 +205,14 @@ function eventNotice(cfg: GameConfig, events: SimEvent[]): string | null {
           : `🦋 ${def?.label ?? 'Un ami'} passe dire bonjour (+humeur)`;
       case 'auto-collected':
         return '🫙 Le Majordome a ramassé le pot.';
+      case 'tree-mature':
+        return "🌳 Un arbre du Jardin est mûr — prêt à récolter !";
+      case 'tree-tier-up':
+        return `🌲 Un arbre du Jardin est passé au tier ${e.data?.tier ?? '?'} !`;
+      case 'cook-done':
+        return `🐟 Fournée prête : +${e.data?.count ?? '?'} Poisson-miette !`;
+      case 'fire-out':
+        return '🔥 Le feu de camp s\'est éteint — ajoute du bois !';
       default:
         break;
     }
@@ -202,6 +234,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   reaction: null,
   notice: null,
   clickFx: null,
+  poolCatch: null,
   language: 'fr',
   notificationsEnabled: true,
   notifyThingsDone: true,
@@ -278,18 +311,19 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       const next = structuredClone(game);
       next.wallet.memorial = next.memorial;
       next.wallet.prestigeSkills = next.prestigeSkills;
+      next.outpost ??= freshOutpost();
       const s = dtSeconds * cfg.simSpeed * cfg.baseTimeScale;
       const crumbsEarned = passiveWalletIncome(next.wallet, s);
+      if (crumbsEarned > 0) next.wallet.crumbs += crumbsEarned;
 
-      if (crumbsEarned > 0) {
-        next.wallet.crumbs += crumbsEarned;
-        set({ game: next });
-        
-        sinceSave += dtSeconds;
-        if (sinceSave >= 30) {
-          sinceSave = 0;
-          void writeSave(makeSave(get()));
-        }
+      const outpostEvents = advanceOutpost(next.outpost, dtSeconds, cfg);
+      const notice = eventNotice(cfg, outpostEvents);
+      set(notice ? { game: next, notice } : { game: next });
+
+      sinceSave += dtSeconds;
+      if (sinceSave >= 30) {
+        sinceSave = 0;
+        void writeSave(makeSave(get()));
       }
       return;
     }
@@ -297,7 +331,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const next = structuredClone(game);
     next.wallet.memorial = next.memorial;
     next.wallet.prestigeSkills = next.prestigeSkills;
+    next.outpost ??= freshOutpost();
     const events = advanceSim(next.companion!, next.wallet, dtSeconds, cfg);
+    events.push(...advanceOutpost(next.outpost, dtSeconds, cfg));
     const notice = eventNotice(cfg, events);
     set(notice ? { game: next, notice } : { game: next });
 
@@ -511,7 +547,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
 
     const satietyBefore = c.satiety;
     const next = structuredClone(get().game); // Use updated game state after potential refilling
-    const res = feedAction(next.companion!, next.wallet, next.capacity, food, cfg);
+    next.outpost ??= freshOutpost();
+    const res = feedAction(next.companion!, next.wallet, next.capacity, food, cfg, next.outpost.resources);
     if (!res.ok) {
       set({ notice: res.reason });
       return;
@@ -1211,19 +1248,135 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const { game } = get();
     const skill = PRESTIGE_SKILLS.find(s => s.id === skillId);
     if (!skill) return;
+    const owned = game.prestigeSkills || [];
+    if (owned.includes(skillId)) return;
+    const missing = prestigeSkillBlocked(skill, owned);
+    if (missing) {
+      const labels = missing.map((id) => PRESTIGE_SKILLS.find((s) => s.id === id)?.label ?? id).join(', ');
+      set({ notice: `Nécessite : ${labels}.` });
+      return;
+    }
     const currentPoints = game.prestigePoints || 0;
     if (currentPoints < skill.cost) {
       set({ notice: "Pas assez de Points de Prestige !" });
       return;
     }
-    const owned = game.prestigeSkills || [];
-    if (owned.includes(skillId)) return;
-    
+
     const next = structuredClone(game);
     next.prestigePoints = currentPoints - skill.cost;
     next.prestigeSkills = [...owned, skillId];
-    
+
     set({ game: next, notice: `✨ Acheté : ${skill.label} !` });
+    void writeSave(makeSave(get()));
+  },
+
+  plantSapling(plotIdx) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = plantSaplingAction(next.outpost, next.wallet, plotIdx);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  harvestTree(plotIdx) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = harvestTreeAction(next.outpost, next.wallet, plotIdx);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  stokeFire(count) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = stokeFireAction(next.outpost, count);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  startCooking(speciesId, count) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = startCookingAction(next.outpost, speciesId, count);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  sellCrumbFish(count) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = sellCrumbFishAction(next.outpost, next.wallet, count);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  buyDecoration(id) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = buyDecorationAction(next.outpost, next.wallet, id);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  buyCompetenceNode(game_, nodeId) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = buyCompetenceNodeAction(next.outpost, game_, nodeId);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    set({ game: next });
+    void writeSave(makeSave(get()));
+  },
+
+  castResolve(hit) {
+    const { game } = get();
+    if (!game.outpost) return;
+    const next = structuredClone(game);
+    next.outpost ??= freshOutpost();
+    const res = castResolveAction(next.outpost, hit);
+    const seq = (get().poolCatch?.seq ?? 0) + 1;
+    const poolCatch = res.outcome ? { ...res.outcome, seq } : null;
+    set({ game: next, poolCatch });
     void writeSave(makeSave(get()));
   },
 

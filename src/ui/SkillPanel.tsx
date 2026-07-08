@@ -8,7 +8,7 @@ import { maxLevelOf, upgradeCost } from '../game/sim';
 import type { SkillCategory } from '../game/types';
 import { useTokidachi } from '../state/store';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './format';
-import { PRESTIGE_SKILLS } from '../game/config';
+import { PRESTIGE_SKILLS, prestigeSkillBlocked } from '../game/config';
 import {
   ICON_TOKEN, ICON_CRUMB, ICON_SKULL, ICON_TREE, ICON_STAR
 } from './icons';
@@ -472,6 +472,7 @@ export function SkillPanel({ onClose }: Props) {
               {PRESTIGE_SKILLS.map((skill) => {
                 const owned = game.prestigeSkills?.includes(skill.id);
                 const affordable = (game.prestigePoints || 0) >= skill.cost;
+                const missing = prestigeSkillBlocked(skill, game.prestigeSkills ?? []);
 
                 return (
                   <div
@@ -493,6 +494,11 @@ export function SkillPanel({ onClose }: Props) {
                         {owned && <span style={{ color: 'var(--mint-dark)', fontSize: '0.9em' }}>✓</span>}
                       </div>
                       <p style={{ fontSize: '0.8em', color: 'var(--ink-soft)', marginTop: '2px' }}>{skill.description}</p>
+                      {!owned && missing && (
+                        <p style={{ fontSize: '0.78em', color: 'var(--danger)', fontStyle: 'italic', marginTop: '2px' }}>
+                          Nécessite : {missing.map((id) => PRESTIGE_SKILLS.find((s) => s.id === id)?.label ?? id).join(', ')}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -502,7 +508,7 @@ export function SkillPanel({ onClose }: Props) {
                         <button
                           className="btn-primary btn-mini"
                           style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}
-                          disabled={!affordable}
+                          disabled={!affordable || !!missing}
                           onClick={() => buyPrestigeSkill(skill.id)}
                         >
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PixelIcon grid={ICON_STAR} alt="" /> {skill.cost} pts</span>

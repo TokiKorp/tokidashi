@@ -25,6 +25,7 @@ export interface FoodDef {
   satiety: number;
   mood?: number;
   vitality?: number;
+  resource?: 'crumbFish';
 }
 
 export interface StageDef {
@@ -239,11 +240,60 @@ export type SimEventType =
   | 'event-defended'
   | 'event-lost'
   | 'event-boon'
-  | 'pet-clicked';
+  | 'pet-clicked'
+  | 'tree-mature'
+  | 'tree-tier-up'
+  | 'cook-done'
+  | 'fire-out';
 
 export interface SimEvent {
   type: SimEventType;
   data?: Record<string, unknown>;
+}
+
+export type TreeRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface Tree {
+  id: number;
+  tier: 1 | 2 | 3 | 4 | 5;
+  rarity: TreeRarity;
+  traits: string[];
+  seed: number;
+  growthSeconds: number;
+  restSeconds: number;
+  harvests: number;
+}
+
+export interface GardenState {
+  plots: (Tree | null)[];
+  nextTreeId: number;
+}
+
+export interface CampState {
+  fuelSeconds: number;
+  cooking: { speciesId: string; count: number; remainingSeconds: number; totalSeconds: number } | null;
+  decorations: string[];
+}
+
+export interface PoolState {
+  casts: number;
+  catches: number;
+  bestTier: number;
+}
+
+export interface CompetenceState {
+  xp: number;
+  nodes: string[];
+}
+
+export type OutpostGame = 'garden' | 'camp' | 'pool';
+
+export interface OutpostState {
+  resources: { wood: number; rawFish: Record<string, number>; crumbFish: number };
+  garden: GardenState;
+  camp: CampState;
+  pool: PoolState;
+  competences: Record<OutpostGame, CompetenceState>;
 }
 
 export interface GameState {
@@ -254,4 +304,5 @@ export interface GameState {
   bornAtIso: string | null;
   prestigePoints?: number;
   prestigeSkills?: string[];
+  outpost?: OutpostState;
 }
