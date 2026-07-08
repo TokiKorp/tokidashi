@@ -9,12 +9,16 @@ import { useTokidachi } from '../state/store';
 import { PetStage } from '../render/PetStage';
 import { DragBar } from './Chrome';
 import { formatActiveDuration } from './format';
+import { ICON_SKULL, ICON_CRUMB } from './icons';
+import { PixelIcon } from './PixelIcon';
 
 function Memorial({ game }: { game: GameState }) {
   if (game.memorial.length === 0) return null;
   return (
     <section className="memorial">
-      <h3>🪦 Mémorial</h3>
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <PixelIcon grid={ICON_SKULL} alt="" size={13} /> Mémorial
+      </h3>
       <ul>
         {game.memorial.map((m, i) => (
           <li key={i}>
@@ -101,7 +105,9 @@ export function DeathScreen() {
 
         {c.children && c.children.length > 0 ? (
           <section style={{ borderTop: '2px dashed rgba(0,0,0,0.1)', marginTop: '12px', paddingTop: '12px' }}>
-            <h3>🐣 Choisir un successeur</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <PixelIcon grid={ICON_CRUMB} alt="" size={13} /> Choisir un successeur
+            </h3>
             <p className="panel-hint" style={{ marginBottom: '8px' }}>
               Désigner un enfant comme héritier. Il démarrera au stade <strong>blob</strong> et <strong>conservera toutes les compétences actives</strong> !
             </p>
@@ -124,7 +130,7 @@ export function DeathScreen() {
                   }}
                   type="button"
                 >
-                  <span style={{ fontSize: '1.5em' }}>👶</span>
+                  <PixelIcon grid={ICON_CRUMB} alt="enfant" size={24} />
                   <span style={{ fontSize: '0.8em', color: 'var(--ink-soft)' }}>Enfant #{idx + 1}</span>
                 </button>
               ))}

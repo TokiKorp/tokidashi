@@ -12,7 +12,7 @@ import { DevPanel } from './ui/DevPanel';
 import { FeedMenu } from './ui/FeedMenu';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './ui/format';
 import { Gauge } from './ui/Gauge';
-import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE } from './ui/icons';
+import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE, ICON_TOKEN, ICON_CRUMB, ICON_GEAR, ICON_BOOK } from './ui/icons';
 import { PixelIcon } from './ui/PixelIcon';
 import { ReportModal } from './ui/ReportModal';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
@@ -164,7 +164,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                📊 Afficher HUD
+                <PixelIcon grid={ICON_TREE} alt="" /> Afficher HUD
               </button>
               <button
                 className="btn-secondary btn-mini"
@@ -174,7 +174,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                🍽️ Nourrir
+                <PixelIcon grid={ICON_FEED} alt="" /> Nourrir
               </button>
               <button
                 className="btn-secondary btn-mini"
@@ -184,7 +184,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                🤹 Jouer
+                <PixelIcon grid={ICON_PLAY} alt="" /> Jouer
               </button>
               <button
                 className="btn-secondary btn-mini"
@@ -194,7 +194,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                🧠 Compétences
+                <PixelIcon grid={ICON_TREE} alt="" /> Compétences
               </button>
               <button
                 className="btn-secondary btn-mini"
@@ -204,7 +204,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                🛒 Boutique
+                <PixelIcon grid={ICON_SHOP} alt="" /> Boutique
               </button>
               <button
                 className="btn-secondary btn-mini"
@@ -214,7 +214,7 @@ export default function App() {
                   setMenuOpen(false);
                 }}
               >
-                ⚙️ Paramètres
+                <PixelIcon grid={ICON_GEAR} alt="" /> Paramètres
               </button>
             </div>
           )}
@@ -241,9 +241,13 @@ export default function App() {
         </DragBar>
 
         <div className="wallet-bar" title={t.wallet_tooltip}>
-          <span className="wallet-item">🪙 {tokenLeft !== null ? formatTokens(tokenLeft) : '∞'}</span>
+          <span className="wallet-item" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <PixelIcon grid={ICON_TOKEN} alt="Token" /> {tokenLeft !== null ? formatTokens(tokenLeft) : '∞'}
+          </span>
           <span className="wallet-separator">·</span>
-          <span className="wallet-item">🍞 {formatCrumbs(game.wallet.crumbs)}</span>
+          <span className="wallet-item" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {formatCrumbs(game.wallet.crumbs)}
+          </span>
         </div>
 
         {c.stage !== 'egg' && (
@@ -255,8 +259,8 @@ export default function App() {
             </section>
 
             {learningDef && learning && (
-              <p className="status-line">
-                📖 Étudie « {learningDef.label} » —{' '}
+              <p className="status-line" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <PixelIcon grid={ICON_BOOK} alt="" size={13} /> Étudie « {learningDef.label} » —{' '}
                 {Math.floor((learning.trainedSeconds / learningDef.trainSeconds) * 100)}%
               </p>
             )}
@@ -298,8 +302,8 @@ export default function App() {
 
         <footer className="statusbar">
           <span>{formatActiveDuration(c.activeSeconds)} {t.active_lifetime}</span>
-          <span title={language === 'fr' ? 'Croissance calée sur les jetons mangés' : 'Growth factor based on tokens eaten'}>
-            🍔 {formatTokens(Math.floor(c.tokensEaten))} ({t.growth} : {Math.round(growthFactor(c.tokensEaten) * 100)}%)
+          <span title={language === 'fr' ? 'Croissance calée sur les jetons mangés' : 'Growth factor based on tokens eaten'} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <PixelIcon grid={ICON_TOKEN} alt="" size={11} /> {formatTokens(Math.floor(c.tokensEaten))} ({t.growth} : {Math.round(growthFactor(c.tokensEaten) * 100)}%)
           </span>
           {cfg.simSpeed !== 1 && <span className="badge-dev">×{cfg.simSpeed}</span>}
         </footer>

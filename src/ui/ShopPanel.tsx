@@ -6,6 +6,8 @@ import { childCost } from '../game/config';
 import { containerOf } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatCrumbs, formatTokens } from './format';
+import { ICON_TOKEN, ICON_CRUMB, ICON_SHIELD, ICON_HOUSE, ICON_UPGRADE, ICON_PEA, ICON_ALERT } from './icons';
+import { PixelIcon } from './PixelIcon';
 
 const SLOT_LABELS: Record<string, string> = {
   head: 'Tête',
@@ -31,9 +33,14 @@ export function ShopPanel({ onClose }: Props) {
     <div className="panel-backdrop" onClick={onClose}>
       <div className="panel" onClick={(e) => e.stopPropagation()}>
         <h2>Boutique</h2>
-        <p className="panel-hint">
-          🪙 {formatTokens(game.capacity.unlimited ? null : game.capacity.budget - game.capacity.used)}
-          {' · '}🍞 {formatCrumbs(game.wallet.crumbs)}
+        <p className="panel-hint" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <PixelIcon grid={ICON_TOKEN} alt="Token" /> {formatTokens(game.capacity.unlimited ? null : game.capacity.budget - game.capacity.used)}
+          </span>
+          {' · '}
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {formatCrumbs(game.wallet.crumbs)}
+          </span>
         </p>
 
         <section>
@@ -58,9 +65,11 @@ export function ShopPanel({ onClose }: Props) {
                     </button>
                   ) : (
                     <button className="btn-secondary btn-mini" onClick={() => buyCosmetic(item.id)}>
-                      {item.currency === 'token'
-                        ? `🪙 ${formatTokens(item.cost)}`
-                        : `🍞 ${item.cost}`}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        {item.currency === 'token'
+                          ? <><PixelIcon grid={ICON_TOKEN} alt="" /> {formatTokens(item.cost)}</>
+                          : <><PixelIcon grid={ICON_CRUMB} alt="" /> {item.cost}</>}
+                      </span>
                     </button>
                   )}
                 </li>
@@ -70,30 +79,42 @@ export function ShopPanel({ onClose }: Props) {
         </section>
 
         <section>
-          <h3>Contenant à Miettes</h3>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <PixelIcon grid={ICON_SHIELD} alt="" /> Contenant à Miettes
+          </h3>
           <p className="panel-hint">
             Actuel : {container.emoji} {container.label} (plafond ×{container.capMultiplier}).
             Un grand contenant stocke plus… et attire plus de pillards.
           </p>
           {nextContainer ? (
             <button className="btn-primary" onClick={upgradeContainer}>
-              Passer au {nextContainer.emoji} {nextContainer.label} (×
-              {nextContainer.capMultiplier}) — 🍞 {nextContainer.cost}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <PixelIcon grid={ICON_UPGRADE} alt="" />
+                Passer au {nextContainer.emoji} {nextContainer.label} (×
+                {nextContainer.capMultiplier}) —{' '}
+                <PixelIcon grid={ICON_CRUMB} alt="" /> {nextContainer.cost}
+              </span>
             </button>
           ) : (
-            <p className="panel-hint">👝 Contenant ultime atteint !</p>
+            <p className="panel-hint" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <PixelIcon grid={ICON_SHIELD} alt="" /> Contenant ultime atteint !
+            </p>
           )}
         </section>
 
         {c.containerLevel >= 3 && (
-          <section className="pea-section" style={{ marginTop: '12px', padding: '10px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.05)' }}>
-            <h3>💼 PEA (Plan d'Épargne en Actions)</h3>
+          <section className="pea-section" style={{ marginTop: '12px', padding: '10px', background: 'rgba(0,0,0,0.02)', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <PixelIcon grid={ICON_PEA} alt="" /> PEA (Plan d'Épargne en Actions)
+            </h3>
             <p className="panel-hint">
-              Solde : <strong>{formatCrumbs(game.wallet.pea || 0)} Miettes</strong>
+              Solde : <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><PixelIcon grid={ICON_CRUMB} alt="" /> {formatCrumbs(game.wallet.pea || 0)}</strong>
               <br />
-              Rendement : +5% par heure active (<strong>+{formatCrumbs(Math.round((game.wallet.pea || 0) * 0.05))}/h</strong>)
+              Rendement : +5%/h active (<strong>+{formatCrumbs(Math.round((game.wallet.pea || 0) * 0.05))}/h</strong>)
               <br />
-              <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>⚠️ Non récupérable !</span> Les miettes placées dessus y restent définitivement.
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--danger)', fontWeight: 'bold' }}>
+                <PixelIcon grid={ICON_ALERT} alt="avertissement" /> Non récupérable !
+              </span>{' '}Les miettes placées restent définitivement.
             </p>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
               <input
@@ -102,7 +123,7 @@ export function ShopPanel({ onClose }: Props) {
                 max={game.wallet.crumbs}
                 placeholder="Ex: 1000"
                 id="pea-deposit-amount"
-                style={{ flex: 1, padding: '4px 8px', border: '1px solid #ccc', borderRadius: '4px', font: 'inherit' }}
+                style={{ flex: 1, padding: '4px 8px', border: '2px solid var(--ink)', borderRadius: '4px', font: 'inherit' }}
               />
               <button
                 className="btn-primary btn-mini"
@@ -124,7 +145,9 @@ export function ShopPanel({ onClose }: Props) {
         )}
 
         <section>
-          <h3>Adoption</h3>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <PixelIcon grid={ICON_HOUSE} alt="" /> Adoption
+          </h3>
           <p className="panel-hint">
             Un petit au génome aléatoire : +{cfg.childProductionPerHour} Miettes/h de récolte,
             une étude en parallèle de plus… mais il mange ({cfg.childCrumbEatPerHour} Miettes/h
@@ -132,7 +155,9 @@ export function ShopPanel({ onClose }: Props) {
             {cfg.maxChildren}.
           </p>
           <button className="btn-primary" onClick={buyChild} disabled={houseFull}>
-            {houseFull ? 'La maison est pleine !' : `Adopter un petit — 🍞 ${nextChildPrice}`}
+            {houseFull
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PixelIcon grid={ICON_HOUSE} alt="" /> La maison est pleine !</span>
+              : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>Adopter un petit — <PixelIcon grid={ICON_CRUMB} alt="" /> {nextChildPrice}</span>}
           </button>
         </section>
 

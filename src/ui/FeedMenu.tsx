@@ -6,6 +6,8 @@ import { foodAffordable } from '../game/actions';
 import { effectiveFoodCost, skillModifiers } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatTokens } from './format';
+import { ICON_TOKEN, ICON_CRUMB, ICON_ALERT } from './icons';
+import { PixelIcon } from './PixelIcon';
 
 interface Props {
   onClose: () => void;
@@ -52,8 +54,10 @@ export function FeedMenu({ onClose }: Props) {
                     className={`food-cost cost-${food.currency} ${surged ? 'cost-surged' : ''}`}
                     title={surged ? 'Prix gonflé par tes achats récents — il redescendra' : undefined}
                   >
-                    {surged ? '📈 ' : ''}
-                    {food.currency === 'token' ? `🪙 ${formatTokens(cost)} TOKEN` : `🍞 ${cost}`}
+                    {surged && <PixelIcon grid={ICON_ALERT} alt="prix gonflé" />}
+                    {food.currency === 'token'
+                      ? <><PixelIcon grid={ICON_TOKEN} alt="Token" /> {formatTokens(cost)} TOKEN</>
+                      : <><PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {cost}</>}
                   </span>
                 </button>
               </li>

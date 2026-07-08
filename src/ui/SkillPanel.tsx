@@ -9,6 +9,11 @@ import type { SkillCategory } from '../game/types';
 import { useTokidachi } from '../state/store';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './format';
 import { PRESTIGE_SKILLS } from '../game/config';
+import {
+  ICON_TOKEN, ICON_CRUMB, ICON_SKULL, ICON_TREE, ICON_STAR
+} from './icons';
+import { PixelIcon } from './PixelIcon';
+import type { Grid } from '../render/pixel';
 
 const CATEGORY_LABELS: Record<SkillCategory, string> = {
   production: 'Production',
@@ -28,13 +33,26 @@ const CATEGORY_ORDER: SkillCategory[] = [
   'defense',
 ];
 
-const STAGE_EMOJI: Record<string, string> = {
-  egg: '🥚',
-  blob: '🫧',
-  kid: '🧒',
-  teen: '🎸',
-  adult: '💼',
-  grandpa: '👴',
+// Icônes pixel art par stade (inline small)
+const STAGE_ICON: Record<string, Grid> = {
+  egg:     [
+    '....oooo....','...oYYYYo...','..oYwYYYYo..','..oYYYYYYo..','..oYYwYYYo..','..oYYYYYYo..','...oYYYYo...','....oooo....','............','............','............','............'
+  ],
+  blob:    [
+    '....oooo....','..ooGGGGoo..','..oGGwGGGo..','..oGGGGGGo..','..oGwGGGGo..','..oGGGGGGo..','...oGGGGo...','....oooo....','............','............','............','............'
+  ],
+  kid:     [
+    '....oooo....','...oBBBBo...','..oBBwBBBo..','.ooBBBBBBoo.','..oBwBBwBo..','..oBBBBBBo..','...oBBBBo...','....oooo....','............','............','............','............'
+  ],
+  teen:    [
+    '...oooooo...','..oMMMMMo...','..oMwMMMo...','..oMMMMMMo..','..oooooooo..','..oMMMMMo...','..oMMMMMo...','..oMMMMMo...','...oooooo...','............','............','............'
+  ],
+  adult:   [
+    '....oooo....','...oBBBBo...','..oBBwBBBo..','..oBBBBBBo..','..ooooooo...','..oBBBBBBo..','..oBBBBBBo..','..oBBBBBBo..','...oooooo...','............','............','............'
+  ],
+  grandpa: [
+    '....oooo....','...oBBBBo...','..oBwBBBBo..','..oBBBBBBo..','...oooooo...','..oGGGGGo...','..oGGGGGo...','..oGGGGGo...','...oooooo...','...oGGGo....','..oGGGGGo...','...oooooo...'
+  ],
 };
 
 interface Props {
@@ -81,7 +99,7 @@ export function SkillPanel({ onClose }: Props) {
             }}
             onClick={() => setTab('skills')}
           >
-            🧠 Compétences
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><PixelIcon grid={ICON_TREE} alt="" /> Compétences</span>
           </button>
           <button
             style={{
@@ -97,7 +115,7 @@ export function SkillPanel({ onClose }: Props) {
             }}
             onClick={() => setTab('prestige')}
           >
-            ✨ Prestige ({game.prestigePoints || 0} pts)
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><PixelIcon grid={ICON_STAR} alt="" /> Prestige ({game.prestigePoints || 0} pts)</span>
           </button>
         </div>
 
@@ -171,13 +189,15 @@ export function SkillPanel({ onClose }: Props) {
                               <div style={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }} title={skill.label}>{skill.label}</span>
                                 <span title={`Stade requis : ${cfg.stages[skill.minStage].label}`}>
-                                  {STAGE_EMOJI[skill.minStage]}
+                                  <PixelIcon grid={STAGE_ICON[skill.minStage]} alt={cfg.stages[skill.minStage].label} size={10} />
                                 </span>
                               </div>
 
                               <div style={{ color: 'var(--ink-soft)', fontSize: '0.9em', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>
-                                  {skill.costCurrency === 'token' ? `🪙 ${formatTokens(skill.cost)}` : `🍞 ${skill.cost}`}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                  {skill.costCurrency === 'token'
+                                    ? <><PixelIcon grid={ICON_TOKEN} alt="" size={10} /> {formatTokens(skill.cost)}</>
+                                    : <><PixelIcon grid={ICON_CRUMB} alt="" size={10} /> {skill.cost}</>}
                                 </span>
                                 <span>{formatActiveDuration(skill.trainSeconds)}</span>
                               </div>
@@ -204,7 +224,7 @@ export function SkillPanel({ onClose }: Props) {
                                       style={{ padding: '2px 6px', fontSize: '0.9em', marginTop: '2px' }}
                                       onClick={() => upgrade(skill.id)}
                                     >
-                                      Améliorer (🍞 {upgradeCost(cfg, skill.cost, progress.level + 1)})
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>Améliorer (<PixelIcon grid={ICON_CRUMB} alt="" size={9} /> {upgradeCost(cfg, skill.cost, progress.level + 1)})</span>
                                     </button>
                                   )}
                                 </div>
@@ -292,7 +312,7 @@ export function SkillPanel({ onClose }: Props) {
                           disabled={!affordable}
                           onClick={() => buyPrestigeSkill(skill.id)}
                         >
-                          🌟 {skill.cost} pts
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PixelIcon grid={ICON_STAR} alt="" /> {skill.cost} pts</span>
                         </button>
                       )}
                     </div>
@@ -303,7 +323,7 @@ export function SkillPanel({ onClose }: Props) {
 
             {/* Prestige Early Section */}
             <div style={{ borderTop: '2px dashed rgba(0,0,0,0.1)', paddingTop: '16px', textAlign: 'center' }}>
-              <h3>💀 Finir le cycle (Prestige précoce)</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><PixelIcon grid={ICON_SKULL} alt="" /> Finir le cycle (Prestige précoce)</h3>
               <p className="panel-hint" style={{ maxWidth: '85%', margin: '4px auto 12px' }}>
                 Sacrifier {c.name} pour recommencer le cycle immédiatement.
                 <br />
@@ -341,7 +361,8 @@ export function SkillPanel({ onClose }: Props) {
                 }}
                 onMouseLeave={() => setPrestigeClicks(0)}
               >
-                💀 {prestigeClicks === 0 ? 'Sacrifier le Tokidachi' : prestigeClicks === 1 ? 'Validation : 2 clics de plus' : 'CONFIRMER : Dernier clic !'}
+                <PixelIcon grid={ICON_SKULL} alt="" />{' '}
+                {prestigeClicks === 0 ? 'Sacrifier le Tokidachi' : prestigeClicks === 1 ? 'Validation : 2 clics de plus' : 'CONFIRMER : Dernier clic !'}
               </button>
             </div>
           </>

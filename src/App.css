@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap');
-
 /* Tokidachi — pixel-cute (GDD §9) : palette douce, lisible d'un coup d'œil. */
 
 :root {
@@ -15,8 +13,8 @@
   --danger: #e07a5f;
   --border: 3px solid var(--ink);
   --shadow: 4px 4px 0 rgba(63, 74, 90, 0.25);
-  font-family: 'Silkscreen', 'Courier New', ui-monospace, monospace;
-  font-size: 13px;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 14px;
   color: var(--ink);
 }
 
@@ -368,15 +366,14 @@ body {
 }
 
 button {
-  font-family: 'Press Start 2P', monospace;
+  font-family: inherit;
 }
 
 .btn-primary,
 .btn-secondary,
 .btn-danger,
 .btn-ghost {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
+  font-size: 13px;
   padding: 8px 10px;
   border: var(--border);
   border-radius: 4px;
@@ -384,7 +381,6 @@ button {
   box-shadow: var(--shadow);
   background: var(--mint);
   color: var(--ink);
-  line-height: 1.2;
 }
 
 .btn-primary {
@@ -457,16 +453,12 @@ button:disabled {
 }
 
 .panel h2 {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 16px;
 }
 
 .panel h3 {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 9px;
+  font-size: 13px;
   margin-bottom: 4px;
-  line-height: 1.4;
 }
 
 .panel section {
@@ -764,9 +756,7 @@ button:disabled {
 }
 
 .screen h1 {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 26px;
 }
 
 .screen p {
@@ -794,10 +784,7 @@ button:disabled {
 }
 
 .memorial h3 {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 9px;
   margin-bottom: 6px;
-  line-height: 1.4;
 }
 
 /* ——— Divers ——— */
