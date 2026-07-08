@@ -127,104 +127,112 @@ fn find_binary(name: &str) -> PathBuf {
 }
 
 #[tauri::command]
-fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
-    let binary_path = find_binary(&cli_name);
-    let mut cmd = Command::new(&binary_path);
-    
-    match cli_name.as_str() {
-        "agy" => {
-            cmd.arg("--print").arg(&prompt);
+async fn run_cli_command(cli_name: String, prompt: String) -> CliRunResult {
+    tokio::task::spawn_blocking(move || {
+        let binary_path = find_binary(&cli_name);
+        let mut cmd = Command::new(&binary_path);
+        
+        match cli_name.as_str() {
+            "agy" => {
+                cmd.arg("--print").arg(&prompt);
+            }
+            "codex" => {
+                cmd.arg("exec").arg(&prompt);
+            }
+            "claude" => {
+                cmd.arg("-p").arg(&prompt);
+            }
+            _ => {
+                return CliRunResult {
+                    response: String::new(),
+                    tokens_consumed: 0,
+                    success: false,
+                    error: Some(format!("Unknown CLI: {}", cli_name)),
+                    cli_used: cli_name,
+                };
+            }
         }
-        "codex" => {
-            cmd.arg("exec").arg(&prompt);
-        }
-        "claude" => {
-            cmd.arg("-p").arg(&prompt);
-        }
-        _ => {
-            return CliRunResult {
-                response: String::new(),
-                tokens_consumed: 0,
-                success: false,
-                error: Some(format!("Unknown CLI: {}", cli_name)),
-                cli_used: cli_name,
-            };
-        }
-    }
-    
-    cmd.env("PAGER", "cat");
+        
+        cmd.env("PAGER", "cat");
 
-    match cmd.output() {
-        Ok(output) => {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let mut response = stdout.clone();
-                let mut tokens_consumed = 0;
-                
-                if cli_name == "codex" {
-                    if let Some(pos) = stdout.find("tokens used") {
-                        let token_section = &stdout[pos + "tokens used".len()..];
-                        let digits: String = token_section.chars().filter(|c| c.is_digit(10)).collect();
-                        if let Ok(parsed) = digits.parse::<u32>() {
-                            tokens_consumed = parsed;
+        match cmd.output() {
+            Ok(output) => {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    let mut response = stdout.clone();
+                    let mut tokens_consumed = 0;
+                    
+                    if cli_name == "codex" {
+                        if let Some(pos) = stdout.find("tokens used") {
+                            let token_section = &stdout[pos + "tokens used".len()..];
+                            let digits: String = token_section.chars().filter(|c| c.is_digit(10)).collect();
+                            if let Ok(parsed) = digits.parse::<u32>() {
+                                tokens_consumed = parsed;
+                            }
+                        }
+                        
+                        if let Some(codex_pos) = stdout.find("codex\n") {
+                            let start = codex_pos + "codex\n".len();
+                            let end = stdout.find("tokens used").unwrap_or(stdout.len());
+                            if start < end {
+                                response = stdout[start..end].trim().to_string();
+                            }
+                        } else if let Some(codex_r_pos) = stdout.find("codex\r\n") {
+                            let start = codex_r_pos + "codex\r\n".len();
+                            let end = stdout.find("tokens used").unwrap_or(stdout.len());
+                            if start < end {
+                                response = stdout[start..end].trim().to_string();
+                            }
                         }
                     }
                     
-                    if let Some(codex_pos) = stdout.find("codex\n") {
-                        let start = codex_pos + "codex\n".len();
-                        let end = stdout.find("tokens used").unwrap_or(stdout.len());
-                        if start < end {
-                            response = stdout[start..end].trim().to_string();
-                        }
-                    } else if let Some(codex_r_pos) = stdout.find("codex\r\n") {
-                        let start = codex_r_pos + "codex\r\n".len();
-                        let end = stdout.find("tokens used").unwrap_or(stdout.len());
-                        if start < end {
-                            response = stdout[start..end].trim().to_string();
-                        }
+                    if tokens_consumed == 0 {
+                        let base_tokens = match cli_name.as_str() {
+                            "agy" => 12000,
+                            "codex" => 8000,
+                            "claude" => 25000,
+                            _ => 5000,
+                        };
+                        let prompt_tokens = prompt.len() as u32 / 4;
+                        let resp_tokens = response.len() as u32 / 4;
+                        tokens_consumed = base_tokens + prompt_tokens + resp_tokens;
+                    }
+                    
+                    CliRunResult {
+                        response: response.trim().to_string(),
+                        cli_used: cli_name,
+                        tokens_consumed,
+                        success: true,
+                        error: None,
+                    }
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    CliRunResult {
+                        response: String::new(),
+                        cli_used: cli_name,
+                        tokens_consumed: 0,
+                        success: false,
+                        error: Some(format!("Exit code {}: {}", output.status.code().unwrap_or(-1), stderr)),
                     }
                 }
-                
-                if tokens_consumed == 0 {
-                    let base_tokens = match cli_name.as_str() {
-                        "agy" => 12000,
-                        "codex" => 8000,
-                        "claude" => 25000,
-                        _ => 5000,
-                    };
-                    let prompt_tokens = prompt.len() as u32 / 4;
-                    let resp_tokens = response.len() as u32 / 4;
-                    tokens_consumed = base_tokens + prompt_tokens + resp_tokens;
-                }
-                
-                CliRunResult {
-                    response: response.trim().to_string(),
-                    cli_used: cli_name,
-                    tokens_consumed,
-                    success: true,
-                    error: None,
-                }
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            }
+            Err(e) => {
                 CliRunResult {
                     response: String::new(),
                     cli_used: cli_name,
                     tokens_consumed: 0,
                     success: false,
-                    error: Some(format!("Exit code {}: {}", output.status.code().unwrap_or(-1), stderr)),
+                    error: Some(e.to_string()),
                 }
             }
         }
-        Err(e) => {
-            CliRunResult {
-                response: String::new(),
-                cli_used: cli_name,
-                tokens_consumed: 0,
-                success: false,
-                error: Some(e.to_string()),
-            }
-        }
-    }
+    }).await.unwrap_or_else(|e| CliRunResult {
+        response: String::new(),
+        cli_used: cli_name,
+        tokens_consumed: 0,
+        success: false,
+        error: Some(format!("Task execution panicked: {}", e)),
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

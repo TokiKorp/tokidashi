@@ -20,6 +20,7 @@ Pour installer l'application compagnon directement sur macOS sans compiler les s
 
 ```bash
 brew tap basilelt/tap
+brew trust basilelt/tap
 brew install --cask --no-quarantine tokidachi
 ```
 

@@ -14,6 +14,7 @@ export interface SaveData {
   backupId?: string;
   cloudSyncEnabled?: boolean;
   cloudServerUrl?: string;
+  language?: 'fr' | 'en';
 }
 
 const STORE_FILE = 'tokidachi.json';

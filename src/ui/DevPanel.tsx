@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { providerById } from '../ai';
 import { useTokidachi } from '../state/store';
 import { formatTokens } from './format';
+import { TRANSLATIONS } from './translations';
 
 interface Props {
   onClose: () => void;
@@ -28,42 +29,67 @@ export function DevPanel({ onClose }: Props) {
     setSelectedCli,
     unlockDevMode,
     disableDevMode,
+    language,
+    setLanguage,
   } = useTokidachi();
   const provider = providerById(providerId);
   const unlimited = game.capacity.unlimited ?? false;
   const [keyInput, setKeyInput] = useState('');
+  
+  const t = TRANSLATIONS[language];
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
       <div className="panel" onClick={(e) => e.stopPropagation()}>
-        <h2>Réglages</h2>
+        <h2>{t.settings}</h2>
 
         <section>
-          <h3>Mode IA & Client</h3>
+          <h3>{t.ai_provider}</h3>
           
+          {/* Language Selector */}
+          <div style={{ margin: '0 0 12px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
+            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.language}</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className={language === 'fr' ? 'btn-primary' : 'btn-secondary'}
+                style={{ flex: 1, padding: '6px', fontSize: '0.85em' }}
+                onClick={() => setLanguage('fr')}
+              >
+                🇫🇷 Français
+              </button>
+              <button
+                className={language === 'en' ? 'btn-primary' : 'btn-secondary'}
+                style={{ flex: 1, padding: '6px', fontSize: '0.85em' }}
+                onClick={() => setLanguage('en')}
+              >
+                🇬🇧 English
+              </button>
+            </div>
+          </div>
+
           <div style={{ margin: '8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>Type de Provider :</label>
+            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.provider_type}</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className={providerId === 'dev' ? 'btn-primary' : 'btn-secondary'}
                 style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
                 onClick={() => setProvider('dev')}
               >
-                🖥️ Mode DEV (Simulé)
+                {t.dev_mode_simulated}
               </button>
               <button
                 className={providerId === 'cli' ? 'btn-primary' : 'btn-secondary'}
                 style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
                 onClick={() => setProvider('cli')}
               >
-                ⚙️ Mode Réel (CLI)
+                {t.real_mode_cli}
               </button>
             </div>
           </div>
 
           {providerId === 'cli' && (
             <div style={{ margin: '12px 0 8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-              <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>Client CLI actif :</label>
+              <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: '#ccc' }}>{t.active_cli_client}</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                 {(['random', 'agy', 'codex', 'claude'] as const).map((cli) => (
                   <button
@@ -72,7 +98,7 @@ export function DevPanel({ onClose }: Props) {
                     style={{ fontSize: '0.8em', padding: '6px 2px', textTransform: 'capitalize' }}
                     onClick={() => setSelectedCli(cli)}
                   >
-                    {cli === 'random' ? '🎲 Auto' : cli}
+                    {cli === 'random' ? (language === 'fr' ? '🎲 Auto' : '🎲 Auto') : cli}
                   </button>
                 ))}
               </div>
@@ -81,17 +107,17 @@ export function DevPanel({ onClose }: Props) {
 
           {game.capacity.tokenBag !== undefined && (
             <p className="panel-hint" style={{ color: '#ffd700', fontWeight: 'bold', margin: '12px 0 8px 0' }}>
-              💼 Sac de jetons : {formatTokens(game.capacity.tokenBag)} TOKEN
+              {t.token_bag} {formatTokens(game.capacity.tokenBag)} TOKEN
             </p>
           )}
 
           <p className="panel-hint">
-            Capacité :{' '}
+            {t.capacity}{' '}
             {unlimited
-              ? '∞ (illimitée)'
+              ? (language === 'fr' ? '∞ (illimitée)' : '∞ (unlimited)')
               : `${formatTokens(game.capacity.budget - game.capacity.used)}/${formatTokens(game.capacity.budget)} TOKEN`}
-            {provider.kind === 'dev' && ' — simulée, aucun coût réel'}
-            {provider.kind === 'cli' && ' — consommation réelle via CLIs'}
+            {provider.kind === 'dev' && t.simulated_no_cost}
+            {provider.kind === 'cli' && t.real_consumption}
           </p>
 
           {provider.kind === 'dev' && (
@@ -100,11 +126,11 @@ export function DevPanel({ onClose }: Props) {
                 className={unlimited ? 'btn-primary' : 'btn-secondary'}
                 onClick={() => setUnlimitedTokens(!unlimited)}
               >
-                TOKEN illimités : {unlimited ? 'ON' : 'OFF'}
+                {t.unlimited_tokens} {unlimited ? 'ON' : 'OFF'}
               </button>
               {!unlimited && (
                 <button className="btn-secondary" onClick={refillCapacity}>
-                  Recharger la capacité simulée
+                  {t.refill_capacity}
                 </button>
               )}
             </>
@@ -112,11 +138,11 @@ export function DevPanel({ onClose }: Props) {
         </section>
 
         <section>
-          <h3>Simulation</h3>
+          <h3>{t.simulation}</h3>
           {devMode ? (
             <>
               <p className="panel-hint" style={{ color: '#4caf50', fontWeight: 'bold', margin: '4px 0 8px 0' }}>
-                ✓ Mode Dev Actif
+                {t.dev_mode_active}
               </p>
               <div className="row">
                 {[1, 10, 60, 1000].map((x) => (
@@ -130,14 +156,16 @@ export function DevPanel({ onClose }: Props) {
                 ))}
               </div>
               <button className="btn-secondary" onClick={() => setLocked(!locked)}>
-                {locked ? 'Simuler le déverrouillage' : 'Simuler le verrouillage'}
+                {locked 
+                  ? (language === 'fr' ? 'Simuler le déverrouillage' : 'Simulate Unlock') 
+                  : (language === 'fr' ? 'Simuler le verrouillage' : 'Simulate Lock')}
               </button>
               <button 
                 className="btn-danger" 
                 style={{ marginTop: '8px', padding: '6px' }} 
                 onClick={disableDevMode}
               >
-                🔒 Désactiver le mode Dev
+                {t.deactivate_dev_mode}
               </button>
             </>
           ) : (
@@ -157,13 +185,13 @@ export function DevPanel({ onClose }: Props) {
               </div>
               
               <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#aaa' }}>Activer le mode Dev :</label>
+                <label style={{ fontSize: '0.8em', fontWeight: 'bold', color: '#aaa' }}>{t.activate_dev_mode_label}</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
                     type="password"
                     value={keyInput}
                     onChange={(e) => setKeyInput(e.target.value)}
-                    placeholder="Clé secrète..."
+                    placeholder={t.secret_key}
                     style={{
                       flex: 1,
                       background: '#222',
@@ -182,7 +210,7 @@ export function DevPanel({ onClose }: Props) {
                       setKeyInput('');
                     }}
                   >
-                    Activer
+                    {t.activate}
                   </button>
                 </div>
               </div>
@@ -191,21 +219,21 @@ export function DevPanel({ onClose }: Props) {
         </section>
 
         <section>
-          <h3>Danger</h3>
+          <h3>{t.danger}</h3>
           <button
             className="btn-danger"
             onClick={() => {
-              if (confirm('Effacer la sauvegarde (Compagnon + mémorial) ?')) {
+              if (confirm(t.confirm_reset)) {
                 void resetSave();
                 onClose();
               }
             }}
           >
-            Réinitialiser la sauvegarde
+            {t.reset_save}
           </button>
         </section>
 
-        <button className="btn-secondary" onClick={onClose}>Fermer</button>
+        <button className="btn-secondary" onClick={onClose}>{t.close}</button>
       </div>
     </div>
   );

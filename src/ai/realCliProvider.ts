@@ -15,8 +15,13 @@ export class RealCliProvider implements AIProvider {
     const cli = selectedCli === 'random' ? pickCli() : selectedCli;
     const question = pickRandomQuestion();
     
-    // 2. Format a prompt instructing the CLI to be extremely brief
-    const prompt = `${question} (Please answer in 1 very short sentence of max 12 words)`;
+    const language = store.getState().language;
+    
+    // 2. Format a prompt instructing the CLI to be extremely brief and in the correct language
+    const promptSuffix = language === 'fr'
+      ? '(Réponds en français en 1 seule phrase très courte de maximum 12 mots)'
+      : '(Please answer in English in 1 very short sentence of max 12 words)';
+    const prompt = `${question} ${promptSuffix}`;
     
     // 3. Update UI/store to show that we are calling the CLI
     

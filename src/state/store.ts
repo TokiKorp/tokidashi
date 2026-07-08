@@ -61,6 +61,7 @@ interface TokidachiStore {
   reaction: ReactionBubble | null;
   notice: string | null;
   report: ReturnReport | null;
+  language: 'fr' | 'en';
 
   // Cloud properties
   backupId: string;
@@ -93,6 +94,7 @@ interface TokidachiStore {
   setSelectedCli(cli: 'random' | 'agy' | 'codex' | 'claude'): void;
   unlockDevMode(key: string): void;
   disableDevMode(): void;
+  setLanguage(lang: 'fr' | 'en'): void;
 
   addTokensToBag(tokens: number, cliName: string): void;
   ensureTokensAvailable(cost: number): Promise<boolean>;
@@ -205,6 +207,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   reaction: null,
   notice: null,
   report: null,
+  language: 'fr',
 
   backupId: '',
   cloudSyncEnabled: false,
@@ -229,6 +232,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         backupId,
         cloudSyncEnabled: save.cloudSyncEnabled ?? false,
         cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi-bb.bb-bbb.com',
+        language: save.language ?? 'fr',
         loaded: true,
       });
       if (!save.backupId) {
@@ -550,6 +554,11 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
+  setLanguage(language) {
+    set({ language });
+    void writeSave(makeSave(get()));
+  },
+
   unlockDevMode(key) {
     if (key.trim() === 'CLAUDIUSMAXIMUS') {
       set({ devMode: true, notice: "Mode Dev activé !" });
@@ -594,7 +603,11 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       const selectedCli = get().selectedCli;
       const cli = selectedCli === 'random' ? pickCli() : selectedCli;
       const question = pickRandomQuestion();
-      const prompt = `${question} (Please answer in 1 very short sentence of max 12 words)`;
+      const language = get().language;
+      const promptSuffix = language === 'fr'
+        ? '(Réponds en français en 1 seule phrase très courte de maximum 12 mots)'
+        : '(Please answer in English in 1 very short sentence of max 12 words)';
+      const prompt = `${question} ${promptSuffix}`;
       
       const seq = ++reactionSeq;
       set({ 
@@ -736,6 +749,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
           backupId: targetBackupId,
           cloudSyncEnabled: saveData.cloudSyncEnabled ?? true,
           cloudServerUrl: saveData.cloudServerUrl ?? cloudServerUrl,
+          language: saveData.language ?? 'fr',
           reaction: null,
           report: null,
           notice: "Sauvegarde restaurée !",
@@ -769,6 +783,7 @@ function makeSave(s: TokidachiStore) {
     backupId: s.backupId,
     cloudSyncEnabled: s.cloudSyncEnabled,
     cloudServerUrl: s.cloudServerUrl,
+    language: s.language,
   };
 }
 
