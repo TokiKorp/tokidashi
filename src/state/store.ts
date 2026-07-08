@@ -231,7 +231,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
 
   backupId: '',
   cloudSyncEnabled: false,
-  cloudServerUrl: 'https://tokidachi-bb.bb-bbb.com',
+  cloudServerUrl: 'https://tokidachi.bb-bbb.com',
 
   async init() {
     const save = await loadSave();
@@ -254,7 +254,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         disableEnemies,
         backupId,
         cloudSyncEnabled: save.cloudSyncEnabled ?? false,
-        cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi-bb.bb-bbb.com',
+        cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi.bb-bbb.com',
         language: save.language ?? 'fr',
         notificationsEnabled: save.notificationsEnabled ?? true,
         notifyThingsDone: save.notifyThingsDone ?? true,
