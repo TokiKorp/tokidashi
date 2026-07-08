@@ -18,14 +18,9 @@ Prérequis : Node ≥ 20 et Rust (`rustup`) pour la coque Tauri.
 
 Pour installer l'application compagnon directement sur macOS sans compiler les sources :
 
-### Option A : Depuis votre clone local du projet
 ```bash
-brew install --cask Formula/tokidachi.rb
-```
-
-### Option B : Directement depuis le dépôt distant
-```bash
-brew install --cask https://raw.githubusercontent.com/oncleguigs/tokidachi/main/Formula/tokidachi.rb
+brew tap basilelt/tap
+brew install --cask tokidachi
 ```
 
 ## Tester
