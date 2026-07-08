@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buyChild,
   buyCosmetic,
+  buyWeapon,
   collectCrumbs,
   createCompanion,
   equipCosmetic,
@@ -24,6 +25,7 @@ import {
   defendEvent,
   levelScale,
   scheduleNextEvent,
+  ufoDefenseChance,
   upgradeCost,
   visibleState,
 } from './sim';
@@ -501,6 +503,30 @@ describe('événements aléatoires : pillards et aubaines', () => {
     // Avec rng 0,99 le tirage retombe sur une aubaine (fin du pool), jamais
     // sur l'OVNI : pas de menace active visant les petits.
     expect(c.activeEvent?.eventId).not.toBe('ufo-abduction');
+  });
+
+  it("l'arsenal anti-OVNI repousse la soucoupe tout seul", () => {
+    const c = child();
+    c.stage = 'teen';
+    c.satiety = 100;
+    c.children = [{ seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false }];
+    c.nextEventAtActive = 0;
+    // Armes achetées : 25 % + 30 % = 55 % de défense.
+    const w = wallet(cfg.weapons[0].cost + cfg.weapons[1].cost);
+    expect(buyWeapon(c, w, capacity(), 'fronde', cfg).ok).toBe(true);
+    expect(buyWeapon(c, w, capacity(), 'canon-baguettes', cfg).ok).toBe(true);
+    expect(buyWeapon(c, w, capacity(), 'fronde', cfg).ok).toBe(false); // déjà installée
+    expect(ufoDefenseChance(c, cfg)).toBeCloseTo(0.55, 5);
+
+    // Pool réduit à l'OVNI, rng 0,5 : tirage → OVNI, défense 0,5 < 0,55 → repoussé.
+    const ufoOnly: GameConfig = {
+      ...cfg,
+      events: cfg.events.filter((e) => e.id === 'ufo-abduction'),
+      rng: () => 0.5,
+    };
+    const events = advanceSim(c, w, 30, ufoOnly);
+    expect(events.some((e) => e.type === 'event-defended' && e.data?.auto)).toBe(true);
+    expect(c.children.length).toBe(1); // personne n'a été enlevé
   });
 
   it("les petits creusent l'appétit du foyer", () => {

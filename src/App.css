@@ -404,6 +404,33 @@ button {
   flex-shrink: 0;
 }
 
+/* Anti-débordement : tout enfant de flex/grid des panneaux peut rétrécir. */
+.panel *,
+.hud * {
+  min-width: 0;
+}
+
+.food-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.skill-head {
+  flex-wrap: wrap;
+}
+
+.statusbar {
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.jar {
+  overflow-wrap: anywhere;
+}
+
 .btn-primary:active,
 .btn-secondary:active,
 .btn-danger:active {

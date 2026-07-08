@@ -64,14 +64,16 @@ const STAGE_ICON: Record<string, Grid> = {
   ],
 };
 
-// ---------- Skill Node Map ----------
-// Layout constants
-const NODE_W = 80;
-const NODE_H = 48;
-const COL_GAP = 20;
-const ROW_GAP = 16;
-const PAD_X = 16;
-const PAD_Y = 14;
+// ---------- Skill Node Map (constellation sur fond sombre) ----------
+const NODE_R = 15; // rayon des nœuds
+const COL_W = 68; // espacement horizontal
+const LANE_H = 74; // hauteur d'une branche
+const ZIGZAG = 12; // décalage vertical alterné (l'effet « toile »)
+const PAD_X = 56; // place pour le nœud d'origine
+const PAD_Y = 30;
+
+const MAP_BG = '#232833';
+const MAP_STAR = 'rgba(255,255,255,0.06)';
 
 interface Props {
   onClose: () => void;
@@ -104,14 +106,17 @@ export function SkillPanel({ onClose }: Props) {
     return { cat, branch };
   }).filter((r) => r.branch.length > 0);
 
-  const svgWidth = Math.max(...rows.map((r) => PAD_X * 2 + r.branch.length * (NODE_W + COL_GAP) - COL_GAP));
-  const svgHeight = PAD_Y * 2 + rows.length * (NODE_H + ROW_GAP) - ROW_GAP + 28; // 28 for label
+  const svgWidth = Math.max(...rows.map((r) => PAD_X + r.branch.length * COL_W + 30));
+  const svgHeight = PAD_Y * 2 + rows.length * LANE_H;
 
-  // Node positions: [rowIndex][colIndex] -> {cx, cy}
+  // Centre de chaque nœud : lanes horizontales avec zigzag → toile organique.
   const nodePos = (rowIdx: number, colIdx: number) => ({
-    x: PAD_X + colIdx * (NODE_W + COL_GAP),
-    y: PAD_Y + 22 + rowIdx * (NODE_H + ROW_GAP),
+    x: PAD_X + colIdx * COL_W + NODE_R,
+    y: PAD_Y + rowIdx * LANE_H + LANE_H / 2 + (colIdx % 2 === 0 ? -ZIGZAG : ZIGZAG),
   });
+
+  // Nœud d'origine (le Compagnon) d'où partent toutes les branches.
+  const origin = { x: 22, y: PAD_Y + (rows.length * LANE_H) / 2 };
 
   const selectedSkill = selectedSkillId ? byId.get(selectedSkillId) : null;
   const selectedProgress = selectedSkill
@@ -166,34 +171,56 @@ export function SkillPanel({ onClose }: Props) {
               </small>
             </div>
 
-            {/* SVG Node Map */}
-            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '340px', border: '2px solid var(--ink)', borderRadius: '8px', background: '#fdf6e3' }}>
-              <svg
-                width={svgWidth}
-                height={svgHeight}
-                style={{ display: 'block', minWidth: '100%' }}
-              >
-                {/* Category labels + rows */}
+            {/* Constellation des compétences — nœuds circulaires sur fond sombre */}
+            <div style={{ overflow: 'auto', maxHeight: '340px', border: '2px solid var(--ink)', borderRadius: '8px', background: MAP_BG }}>
+              <svg width={svgWidth} height={svgHeight} style={{ display: 'block' }}>
+                {/* Poussière d'étoiles déterministe */}
+                {Array.from({ length: 70 }, (_, i) => (
+                  <circle
+                    key={`star-${i}`}
+                    cx={((i * 137) % svgWidth)}
+                    cy={((i * 89 + 31) % svgHeight)}
+                    r={i % 3 === 0 ? 1.5 : 1}
+                    fill={MAP_STAR}
+                  />
+                ))}
+
+                {/* Nœud d'origine : le Compagnon, d'où rayonnent les branches */}
+                {rows.map((_, rowIdx) => {
+                  const to = nodePos(rowIdx, 0);
+                  return (
+                    <path
+                      key={`root-${rowIdx}`}
+                      d={`M ${origin.x} ${origin.y} Q ${(origin.x + to.x) / 2} ${to.y} ${to.x - NODE_R} ${to.y}`}
+                      fill="none"
+                      stroke="rgba(255,255,255,0.18)"
+                      strokeWidth={1.5}
+                    />
+                  );
+                })}
+                <circle cx={origin.x} cy={origin.y} r={13} fill="#f7c873" stroke="#fff" strokeWidth={2} />
+                <text x={origin.x} y={origin.y + 4} textAnchor="middle" fontSize="12">🐣</text>
+
                 {rows.map(({ cat, branch }, rowIdx) => {
                   const color = CATEGORY_COLORS[cat];
-                  const labelY = PAD_Y + rowIdx * (NODE_H + ROW_GAP);
+                  const laneY = PAD_Y + rowIdx * LANE_H;
 
                   return (
                     <g key={cat}>
-                      {/* Category label */}
                       <text
                         x={PAD_X}
-                        y={labelY + 12}
+                        y={laneY + 8}
                         fontSize="9"
                         fontFamily="'Courier New', monospace"
                         fontWeight="bold"
                         fill={color}
-                        style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                        opacity={0.9}
+                        style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
                       >
                         {CATEGORY_LABELS[cat]}
                       </text>
 
-                      {/* Connector lines between nodes */}
+                      {/* Liens : lumineux si le tronçon est débloqué */}
                       {branch.map((skill, colIdx) => {
                         if (colIdx === 0) return null;
                         const from = nodePos(rowIdx, colIdx - 1);
@@ -204,18 +231,18 @@ export function SkillPanel({ onClose }: Props) {
                         return (
                           <line
                             key={`line-${skill.id}`}
-                            x1={from.x + NODE_W}
-                            y1={from.y + NODE_H / 2}
-                            x2={to.x}
-                            y2={to.y + NODE_H / 2}
-                            stroke={prevOwned ? color : '#ccc'}
-                            strokeWidth={prevOwned ? 3 : 2}
-                            strokeDasharray={prevOwned ? undefined : '4 3'}
+                            x1={from.x + NODE_R}
+                            y1={from.y}
+                            x2={to.x - NODE_R}
+                            y2={to.y}
+                            stroke={prevOwned ? color : 'rgba(255,255,255,0.22)'}
+                            strokeWidth={prevOwned ? 2.5 : 1.5}
+                            strokeDasharray={prevOwned ? undefined : '3 4'}
                           />
                         );
                       })}
 
-                      {/* Nodes */}
+                      {/* Nœuds circulaires */}
                       {branch.map((skill, colIdx) => {
                         const pos = nodePos(rowIdx, colIdx);
                         const progress = c.skills.find((sp) => sp.skillId === skill.id);
@@ -227,15 +254,8 @@ export function SkillPanel({ onClose }: Props) {
                         const isSelected = selectedSkillId === skill.id;
                         const isOwned = progress?.state === 'owned';
                         const isLearning = progress?.state === 'learning' || progress?.upgrading;
-
-                        let fill = '#fff';
-                        let stroke = '#ccc';
-                        let strokeW = 2;
-                        if (isOwned) { fill = 'rgba(111,199,168,0.2)'; stroke = color; strokeW = 3; }
-                        else if (isLearning) { fill = 'rgba(247,200,115,0.25)'; stroke = '#f7c873'; strokeW = 3; }
-                        else if (!isLocked) { fill = '#fff'; stroke = color; strokeW = 2; }
-
-                        if (isSelected) { stroke = '#3f4a5a'; strokeW = 3; }
+                        const level = progress?.level ?? 0;
+                        const maxLvl = maxLevelOf(cfg, skill.id);
 
                         return (
                           <g
@@ -243,105 +263,95 @@ export function SkillPanel({ onClose }: Props) {
                             style={{ cursor: 'pointer' }}
                             onClick={() => setSelectedSkillId(isSelected ? null : skill.id)}
                           >
-                            {/* Node rect */}
-                            <rect
-                              x={pos.x}
-                              y={pos.y}
-                              width={NODE_W}
-                              height={NODE_H}
-                              rx={4}
-                              ry={4}
-                              fill={fill}
-                              stroke={stroke}
-                              strokeWidth={strokeW}
-                              opacity={isLocked ? 0.5 : 1}
+                            {/* Halo des nœuds acquis / en étude */}
+                            {(isOwned || isLearning) && (
+                              <circle
+                                cx={pos.x}
+                                cy={pos.y}
+                                r={NODE_R + 5}
+                                fill="none"
+                                stroke={isOwned ? color : '#f7c873'}
+                                strokeWidth={2}
+                                opacity={0.35}
+                              />
+                            )}
+
+                            {/* Cercle principal */}
+                            <circle
+                              cx={pos.x}
+                              cy={pos.y}
+                              r={NODE_R}
+                              fill={isOwned ? color : isLearning ? 'rgba(247,200,115,0.25)' : MAP_BG}
+                              stroke={
+                                isSelected
+                                  ? '#ffffff'
+                                  : isOwned || isLearning || !isLocked
+                                    ? color
+                                    : 'rgba(255,255,255,0.25)'
+                              }
+                              strokeWidth={isSelected ? 3 : isOwned ? 2.5 : 2}
+                              opacity={isLocked && !isSelected ? 0.55 : 1}
                             />
 
-                            {/* Selection highlight */}
-                            {isSelected && (
-                              <rect
-                                x={pos.x - 2}
-                                y={pos.y - 2}
-                                width={NODE_W + 4}
-                                height={NODE_H + 4}
-                                rx={6}
-                                ry={6}
-                                fill="none"
-                                stroke="#3f4a5a"
-                                strokeWidth={1.5}
-                                strokeDasharray="4 2"
-                              />
-                            )}
-
-                            {/* Lock icon for locked nodes */}
-                            {isLocked && (
-                              <text x={pos.x + NODE_W / 2} y={pos.y + 14} textAnchor="middle" fontSize="11" fill="#999">■</text>
-                            )}
-
-                            {/* Progress bar for learning */}
+                            {/* Progression d'étude : arc doré */}
                             {isLearning && progress && (
-                              <rect
-                                x={pos.x + 4}
-                                y={pos.y + NODE_H - 8}
-                                width={(NODE_W - 8) * Math.min(1, progress.trainedSeconds / skill.trainSeconds)}
-                                height={4}
-                                rx={2}
-                                fill="#f7c873"
+                              <circle
+                                cx={pos.x}
+                                cy={pos.y}
+                                r={NODE_R}
+                                fill="none"
+                                stroke="#f7c873"
+                                strokeWidth={3}
+                                strokeDasharray={`${2 * Math.PI * NODE_R * Math.min(1, progress.trainedSeconds / skill.trainSeconds)} ${2 * Math.PI * NODE_R}`}
+                                transform={`rotate(-90 ${pos.x} ${pos.y})`}
                               />
                             )}
 
-                            {/* Skill label */}
+                            {/* Contenu : cadenas / coût / niveau */}
                             <text
-                              x={pos.x + NODE_W / 2}
-                              y={pos.y + (isLocked ? 28 : 18)}
+                              x={pos.x}
+                              y={pos.y + 3.5}
                               textAnchor="middle"
-                              fontSize="9"
+                              fontSize={isOwned ? '10' : '8'}
                               fontFamily="'Courier New', monospace"
                               fontWeight="bold"
-                              fill={isLocked ? '#aaa' : '#3f4a5a'}
+                              fill={isOwned ? MAP_BG : isLocked ? 'rgba(255,255,255,0.4)' : '#fff'}
                             >
-                              {skill.label.length > 12 ? skill.label.slice(0, 11) + '…' : skill.label}
+                              {isLocked
+                                ? '🔒'
+                                : isOwned
+                                  ? `${level}`
+                                  : skill.costCurrency === 'token'
+                                    ? `${formatTokens(skill.cost)}`
+                                    : `${skill.cost}`}
                             </text>
 
-                            {/* Level badge */}
-                            {isOwned && (
-                              <text
-                                x={pos.x + NODE_W / 2}
-                                y={pos.y + 30}
-                                textAnchor="middle"
-                                fontSize="8"
-                                fill={color}
-                                fontFamily="'Courier New', monospace"
-                              >
-                                Niv.{progress?.level}/{maxLevelOf(cfg, skill.id)}
-                              </text>
-                            )}
+                            {/* Pips de niveau autour du nœud acquis */}
+                            {isOwned &&
+                              Array.from({ length: maxLvl }, (_, i) => {
+                                const angle = -Math.PI / 2 + (i * 2 * Math.PI) / maxLvl;
+                                return (
+                                  <circle
+                                    key={i}
+                                    cx={pos.x + Math.cos(angle) * (NODE_R + 5)}
+                                    cy={pos.y + Math.sin(angle) * (NODE_R + 5)}
+                                    r={1.8}
+                                    fill={i < level ? '#f7c873' : 'rgba(255,255,255,0.25)'}
+                                  />
+                                );
+                              })}
 
-                            {/* Cost for not-yet-owned */}
-                            {!isOwned && !isLocked && (
-                              <text
-                                x={pos.x + NODE_W / 2}
-                                y={pos.y + 30}
-                                textAnchor="middle"
-                                fontSize="7.5"
-                                fill="#7a8494"
-                                fontFamily="'Courier New', monospace"
-                              >
-                                {skill.costCurrency === 'token'
-                                  ? `${formatTokens(skill.cost)}T`
-                                  : `${skill.cost}M`}
-                              </text>
-                            )}
-
-                            {/* Status dot */}
-                            <circle
-                              cx={pos.x + NODE_W - 8}
-                              cy={pos.y + 8}
-                              r={4}
-                              fill={isOwned ? color : isLearning ? '#f7c873' : isLocked ? '#ddd' : '#fff'}
-                              stroke={isOwned ? color : '#ccc'}
-                              strokeWidth={1.5}
-                            />
+                            {/* Libellé sous le nœud */}
+                            <text
+                              x={pos.x}
+                              y={pos.y + NODE_R + 13}
+                              textAnchor="middle"
+                              fontSize="7.5"
+                              fontFamily="'Courier New', monospace"
+                              fill={isLocked ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.85)'}
+                            >
+                              {skill.label.length > 11 ? skill.label.slice(0, 10) + '…' : skill.label}
+                            </text>
                           </g>
                         );
                       })}

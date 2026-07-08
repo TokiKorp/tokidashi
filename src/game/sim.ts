@@ -321,6 +321,14 @@ function rng(cfg: GameConfig): number {
   return (cfg.rng ?? Math.random)();
 }
 
+/** Chance cumulée de l'arsenal anti-OVNI (Armurerie). */
+export function ufoDefenseChance(c: CompanionState, cfg: GameConfig): number {
+  return c.weapons.reduce(
+    (sum, id) => sum + (cfg.weapons.find((w) => w.id === id)?.ufoDefense ?? 0),
+    0,
+  );
+}
+
 export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
   const span = cfg.eventMaxIntervalSeconds - cfg.eventMinIntervalSeconds;
   const base = cfg.eventMinIntervalSeconds + rng(cfg) * span;
@@ -379,8 +387,13 @@ function stepEvents(
     return;
   }
 
-  // Menace : la Défense peut la repousser toute seule.
-  if (rng(cfg) < mods.autoDefend) {
+  // Menace : la Défense peut la repousser toute seule — et contre l'OVNI,
+  // l'arsenal de l'Armurerie s'ajoute (fronde, canon à baguettes, laser…).
+  const autoChance =
+    def.id === 'ufo-abduction'
+      ? Math.min(0.95, mods.autoDefend + ufoDefenseChance(c, cfg))
+      : mods.autoDefend;
+  if (rng(cfg) < autoChance) {
     events.push({ type: 'event-defended', data: { eventId: def.id, auto: true } });
     scheduleNextEvent(c, cfg);
     return;

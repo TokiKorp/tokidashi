@@ -11,6 +11,7 @@ import { runCliQuery, pickCli, pickRandomQuestion, shortenResponse } from '../ai
 import {
   buyChild as buyChildAction,
   buyCosmetic as buyCosmeticAction,
+  buyWeapon as buyWeaponAction,
   collectCrumbs,
   createCompanion,
   equipCosmetic as equipCosmeticAction,
@@ -85,6 +86,7 @@ interface TokidachiStore {
   buyCosmetic(id: string): void;
   toggleCosmetic(id: string): void;
   buyChild(): void;
+  buyWeapon(id: string): void;
   upgradeContainer(): void;
   buryAndRestart(name: string): void;
   succeed(childIndex: number, name: string): void;
@@ -148,6 +150,7 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
     c.cosmetics ??= { owned: [], equipped: [] };
     c.children ??= [];
     c.containerLevel ??= 0;
+    c.weapons ??= [];
     c.activeEvent ??= null;
     // Ancien nom de stade (avant les 5 niveaux d'évolution).
     if ((c.stage as string) === 'child') c.stage = 'kid' as StageCode;
@@ -676,6 +679,20 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       return;
     }
     set({ game: next, notice: '🥚 Un petit rejoint la famille !' });
+    void writeSave(makeSave(get()));
+  },
+
+  buyWeapon(id) {
+    const { game, cfg } = get();
+    if (!game.companion) return;
+    const next = structuredClone(game);
+    const res = buyWeaponAction(next.companion!, next.wallet, next.capacity, id, cfg);
+    if (!res.ok) {
+      set({ notice: res.reason });
+      return;
+    }
+    const label = cfg.weapons.find((w) => w.id === id)?.label ?? id;
+    set({ game: next, notice: `🛡️ ${label} installé — les OVNIs vont déguster !` });
     void writeSave(makeSave(get()));
   },
 

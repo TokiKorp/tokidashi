@@ -144,6 +144,8 @@ export interface CompanionState {
   children: Genome[];
   /** Niveau du contenant à Miettes (index dans cfg.containers). */
   containerLevel: number;
+  /** Armes anti-OVNI possédées (boutique, Armurerie). */
+  weapons: string[];
   /** Événement en cours (menace à chasser d'un clic avant l'échéance). */
   activeEvent: ActiveEvent | null;
   /** Prochain événement aléatoire, en activeSeconds. */
@@ -183,6 +185,18 @@ export interface ContainerDef {
   capMultiplier: number;
   /** Coût en Miettes pour ATTEINDRE ce niveau (0 pour le premier). */
   cost: number;
+}
+
+/** Arme anti-OVNI (boutique, Armurerie) : repousse l'abduction toute seule. */
+export interface WeaponDef {
+  id: string;
+  label: string;
+  emoji: string;
+  description: string;
+  currency: Currency;
+  cost: number;
+  /** Chance additive (0-1) de repousser un OVNI automatiquement. */
+  ufoDefense: number;
 }
 
 /** Cosmétique équipable (GDD §6.3) — rendu en pixels sur le sprite. */

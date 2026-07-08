@@ -326,11 +326,22 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut last = session_lock::is_locked();
+                let mut tick: u32 = 0;
                 loop {
                     let locked = session_lock::is_locked();
                     if locked != last {
                         last = locked;
                         let _ = handle.emit(LOCK_EVENT, locked);
+                    }
+                    // macOS perd parfois le niveau flottant après un changement
+                    // de Space / une app plein écran : on ré-affirme le premier
+                    // plan toutes les 5 s (idempotent, coût nul).
+                    tick += 1;
+                    if tick % 5 == 0 {
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.set_always_on_top(true);
+                            let _ = window.set_visible_on_all_workspaces(true);
+                        }
                     }
                     std::thread::sleep(std::time::Duration::from_millis(1000));
                 }

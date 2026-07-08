@@ -3,7 +3,7 @@
 // le sprite ; les petits aident à la production de Miettes.
 
 import { childCost } from '../game/config';
-import { containerOf } from '../game/sim';
+import { containerOf, ufoDefenseChance } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatCrumbs, formatTokens } from './format';
 import { ICON_TOKEN, ICON_CRUMB, ICON_SHIELD, ICON_HOUSE, ICON_UPGRADE, ICON_PEA, ICON_ALERT } from './icons';
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function ShopPanel({ onClose }: Props) {
-  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild, upgradeContainer } = useTokidachi();
+  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild, buyWeapon, upgradeContainer } = useTokidachi();
   const c = game.companion;
   if (!c) return null;
 
@@ -159,6 +159,42 @@ export function ShopPanel({ onClose }: Props) {
               ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PixelIcon grid={ICON_HOUSE} alt="" /> La maison est pleine !</span>
               : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>Adopter un petit — <PixelIcon grid={ICON_CRUMB} alt="" /> {nextChildPrice}</span>}
           </button>
+        </section>
+
+        <section>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <PixelIcon grid={ICON_ALERT} alt="" /> Armurerie anti-OVNI
+          </h3>
+          <p className="panel-hint">
+            Chaque arme installée ajoute sa chance de repousser une abduction toute
+            seule. Arsenal actuel : {Math.round(ufoDefenseChance(c, cfg) * 100)} % de
+            défense.
+          </p>
+          <ul className="shop-list">
+            {cfg.weapons.map((w) => {
+              const owned = c.weapons.includes(w.id);
+              return (
+                <li key={w.id} className="shop-item" title={w.description}>
+                  <span className="shop-emoji">{w.emoji}</span>
+                  <span className="shop-name">
+                    {w.label}
+                    <small className="shop-slot"> · +{Math.round(w.ufoDefense * 100)} %</small>
+                  </span>
+                  {owned ? (
+                    <span style={{ fontSize: '0.85em', color: 'var(--mint-dark)', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                      Installée ✓
+                    </span>
+                  ) : (
+                    <button className="btn-secondary btn-mini" onClick={() => buyWeapon(w.id)}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <PixelIcon grid={ICON_CRUMB} alt="" size={10} /> {w.cost}
+                      </span>
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </section>
 
         <button className="btn-secondary" onClick={onClose}>Fermer</button>

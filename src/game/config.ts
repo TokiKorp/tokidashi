@@ -4,6 +4,7 @@
 import type {
   ContainerDef,
   CosmeticDef,
+  WeaponDef,
   EventDef,
   FoodDef,
   SkillCategory,
@@ -18,6 +19,8 @@ export interface GameConfig {
   foods: FoodDef[];
   skills: SkillDef[];
   cosmetics: CosmeticDef[];
+  /** Armurerie anti-OVNI (boutique). */
+  weapons: WeaponDef[];
   events: EventDef[];
 
   /** Nombre de tapotements pour faire éclore l'œuf. */
@@ -410,6 +413,37 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'bow', label: 'Nœud papillon', emoji: '🎀', slot: 'neck', currency: 'crumbs', cost: 200 },
     { id: 'scarf', label: 'Écharpe', emoji: '🧣', slot: 'neck', currency: 'crumbs', cost: 280 },
     { id: 'gold-chain', label: 'Chaîne en or', emoji: '⛓️', slot: 'neck', currency: 'token', cost: 30_000 },
+  ],
+
+  // Armurerie anti-OVNI : chaque arme ajoute sa chance de repousser la soucoupe.
+  weapons: [
+    {
+      id: 'fronde',
+      label: 'Fronde anti-OVNI',
+      emoji: '🎯',
+      description: 'Un caillou bien placé dans le hublot. +25 % de chances de repousser un OVNI.',
+      currency: 'crumbs',
+      cost: 800,
+      ufoDefense: 0.25,
+    },
+    {
+      id: 'canon-baguettes',
+      label: 'Canon à baguettes',
+      emoji: '🥖',
+      description: 'Tir tendu de baguettes tradition. +30 % de chances de repousser un OVNI.',
+      currency: 'crumbs',
+      cost: 4_000,
+      ufoDefense: 0.3,
+    },
+    {
+      id: 'laser-grenier',
+      label: 'Laser de grenier',
+      emoji: '🔆',
+      description: 'Monté sur le toit, alimenté aux Miettes. +35 % de chances de repousser un OVNI.',
+      currency: 'crumbs',
+      cost: 25_000,
+      ufoDefense: 0.35,
+    },
   ],
 
   // Événements aléatoires — menaces (cliquer pour défendre) et aubaines.
