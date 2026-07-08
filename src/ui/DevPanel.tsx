@@ -75,25 +75,25 @@ export function DevPanel({ onClose }: Props) {
             </div>
           </div>
 
-          <div style={{ margin: '8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
-            <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.provider_type}</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Provider type — only CLI visible without dev key; Simulé requires devMode */}
+          {!devMode && (
+            <div style={{ margin: '8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
+              <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.provider_type}</label>
               <button
-                className={providerId === 'dev' ? 'btn-primary' : 'btn-secondary'}
-                style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
-                onClick={() => setProvider('dev')}
-              >
-                {t.dev_mode_simulated}
-              </button>
-              <button
-                className={providerId === 'cli' ? 'btn-primary' : 'btn-secondary'}
-                style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
-                onClick={() => setProvider('cli')}
+                className="btn-primary"
+                style={{ padding: '8px', fontSize: '0.9em' }}
+                disabled
               >
                 {t.real_mode_cli}
               </button>
+              <small style={{ color: 'var(--ink-soft)', fontSize: '0.78em' }}>
+                {language === 'fr'
+                  ? '🔒 Le mode simulé est réservé au mode dev (clé secrète requise).'
+                  : '🔒 Simulated mode requires dev mode (secret key).'
+                }
+              </small>
             </div>
-          </div>
+          )}
 
           {providerId === 'cli' && (
             <div style={{ margin: '12px 0 8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
@@ -248,6 +248,28 @@ export function DevPanel({ onClose }: Props) {
                   </button>
                 ))}
               </div>
+
+              {/* Provider selector — gated here */}
+              <div style={{ margin: '8px 0', display: 'flex', gap: '6px', flexDirection: 'column' }}>
+                <label style={{ fontSize: '0.85em', fontWeight: 'bold', color: 'var(--ink-soft)' }}>{t.provider_type}</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={providerId === 'dev' ? 'btn-primary' : 'btn-secondary'}
+                    style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
+                    onClick={() => setProvider('dev')}
+                  >
+                    {t.dev_mode_simulated}
+                  </button>
+                  <button
+                    className={providerId === 'cli' ? 'btn-primary' : 'btn-secondary'}
+                    style={{ flex: 1, padding: '8px', fontSize: '0.9em' }}
+                    onClick={() => setProvider('cli')}
+                  >
+                    {t.real_mode_cli}
+                  </button>
+                </div>
+              </div>
+
               <button className="btn-secondary" onClick={() => setLocked(!locked)}>
                 {locked 
                   ? (language === 'fr' ? 'Simuler le déverrouillage' : 'Simulate Unlock') 
