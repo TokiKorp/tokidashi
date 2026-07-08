@@ -129,7 +129,7 @@ export function SkillPanel({ onClose }: Props) {
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
-      <div className="panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '680px', width: '95%' }}>
+      <div className="panel" onClick={(e) => e.stopPropagation()} style={{ width: 'min(94vw, 620px)' }}>
 
         {/* Onglets */}
         <div style={{ display: 'flex', borderBottom: '2px solid var(--ink)', marginBottom: '12px' }}>

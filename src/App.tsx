@@ -241,11 +241,11 @@ export default function App() {
         </DragBar>
 
         <div className="wallet-bar" title={t.wallet_tooltip}>
-          <span className="wallet-item" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span className="wallet-item">
             <PixelIcon grid={ICON_TOKEN} alt="Token" /> {tokenLeft !== null ? formatTokens(tokenLeft) : '∞'}
           </span>
           <span className="wallet-separator">·</span>
-          <span className="wallet-item" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span className="wallet-item">
             <PixelIcon grid={ICON_CRUMB} alt="Miettes" /> {formatCrumbs(game.wallet.crumbs)}
           </span>
         </div>
