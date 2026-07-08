@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTokidachi } from '../state/store';
 import { formatActiveDuration, formatCrumbs, formatTokens } from './format';
+import { TRANSLATIONS } from './translations';
 
 interface Props {
   onClose: () => void;
@@ -8,6 +9,7 @@ interface Props {
 
 type Tab = 'backup' | 'leaderboard';
 type SortMetric = 'tokens_eaten' | 'active_seconds' | 'crumbs';
+type Scope = 'all' | 'alive';
 
 interface LeaderboardEntry {
   companion_name: string;
@@ -15,7 +17,8 @@ interface LeaderboardEntry {
   active_seconds: number;
   tokens_eaten: number;
   crumbs: number;
-  dev_mode?: number;
+  dead: number;
+  died_at: string | null;
   updated_at: string;
 }
 
@@ -38,7 +41,9 @@ export function CloudPanel({ onClose }: Props) {
     regenerateBackupId,
     triggerCloudSync,
     restoreFromCloud,
+    language,
   } = useTokidachi();
+  const t = TRANSLATIONS[language];
 
   const [activeTab, setActiveTab] = useState<Tab>('backup');
   const [serverUrlInput, setServerUrlInput] = useState(cloudServerUrl);
@@ -50,6 +55,7 @@ export function CloudPanel({ onClose }: Props) {
 
   // Leaderboard state
   const [metric, setMetric] = useState<SortMetric>('tokens_eaten');
+  const [scope, setScope] = useState<Scope>('all');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState(false);
@@ -102,7 +108,7 @@ export function CloudPanel({ onClose }: Props) {
     setLeaderboardLoading(true);
     setLeaderboardError(false);
     try {
-      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/leaderboard?sortBy=${metric}`;
+      const url = `${cloudServerUrl.replace(/\/$/, '')}/api/leaderboard?sortBy=${metric}&scope=${scope}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
@@ -123,7 +129,7 @@ export function CloudPanel({ onClose }: Props) {
     if (activeTab === 'leaderboard') {
       void fetchLeaderboard();
     }
-  }, [activeTab, metric, cloudServerUrl]);
+  }, [activeTab, metric, scope, cloudServerUrl]);
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
@@ -331,6 +337,18 @@ export function CloudPanel({ onClose }: Props) {
                   </button>
                 ))}
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginTop: '6px' }}>
+                {(['all', 'alive'] as const).map((s) => (
+                  <button
+                    key={s}
+                    className={scope === s ? 'btn-primary' : 'btn-secondary'}
+                    style={{ fontSize: '0.75em', padding: '6px 2px' }}
+                    onClick={() => setScope(s)}
+                  >
+                    {s === 'all' ? t.lb_scope_all : t.lb_scope_alive}
+                  </button>
+                ))}
+              </div>
             </section>
 
             <div
@@ -367,37 +385,29 @@ export function CloudPanel({ onClose }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {leaderboard.map((entry, idx) => (
+                    {leaderboard.map((entry, idx) => {
+                      const isDead = !!entry.dead;
+                      const diedOnLabel = entry.died_at
+                        ? `${t.lb_died_on} ${new Date(entry.died_at).toLocaleDateString()}`
+                        : undefined;
+                      return (
                       <tr
                         key={idx}
+                        title={diedOnLabel}
                         style={{
                           borderBottom: '1px solid #333',
-                          background: entry.updated_at.startsWith(new Date().toISOString().substring(0, 10))
+                          opacity: isDead ? 0.55 : 1,
+                          background: !isDead && entry.updated_at.startsWith(new Date().toISOString().substring(0, 10))
                             ? 'rgba(76, 175, 80, 0.05)'
                             : 'none',
                         }}
                       >
-                        <td style={{ padding: '6px 8px', color: idx === 0 ? '#gold' : idx === 1 ? '#silver' : idx === 2 ? '#cd7f32' : '#888', fontWeight: idx < 3 ? 'bold' : 'normal' }}>
+                        <td style={{ padding: '6px 8px', color: idx === 0 ? '#ffd700' : idx === 1 ? '#c0c0c0' : idx === 2 ? '#cd7f32' : '#888', fontWeight: idx < 3 ? 'bold' : 'normal' }}>
                           {idx + 1}
                         </td>
-                        <td style={{ padding: '6px 8px', fontWeight: entry.companion_name ? 'bold' : 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: entry.companion_name ? 'bold' : 'normal', color: isDead ? '#999' : undefined, display: 'flex', alignItems: 'center', gap: '4px' }}>
                           {entry.companion_name}
-                          {!!entry.dev_mode && (
-                            <span 
-                              style={{ 
-                                background: '#333', 
-                                color: '#ffd700', 
-                                border: '1px solid #ffd700', 
-                                borderRadius: '3px', 
-                                padding: '1px 4px', 
-                                fontSize: '0.7em', 
-                                fontWeight: 'bold' 
-                              }}
-                              title="Mode Dev activé (triche active/simulée)"
-                            >
-                              DEV
-                            </span>
-                          )}
+                          {isDead && <span aria-hidden="true">†</span>}
                         </td>
                         <td style={{ padding: '6px 8px', fontSize: '0.95em' }}>
                           {STAGE_LABELS[entry.stage] || entry.stage}
@@ -408,7 +418,8 @@ export function CloudPanel({ onClose }: Props) {
                           {metric === 'crumbs' && `🍞 ${formatCrumbs(entry.crumbs)}`}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

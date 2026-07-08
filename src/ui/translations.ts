@@ -40,6 +40,11 @@ export const TRANSLATIONS = {
     settings_panel: "Réglages",
     hide_hud: "Masquer les contrôles",
     show_hud: "Afficher les contrôles",
+
+    // CloudPanel.tsx leaderboard
+    lb_scope_all: "Tous les temps",
+    lb_scope_alive: "Vivants",
+    lb_died_on: "Mort le",
   },
   en: {
     settings: "Settings",
@@ -80,5 +85,10 @@ export const TRANSLATIONS = {
     settings_panel: "Settings",
     hide_hud: "Hide Controls",
     show_hud: "Show Controls",
+
+    // CloudPanel.tsx leaderboard
+    lb_scope_all: "All time",
+    lb_scope_alive: "Alive",
+    lb_died_on: "Died on",
   }
 };
