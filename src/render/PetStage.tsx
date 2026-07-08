@@ -3,7 +3,7 @@
 // (growth 0→1, échelle log jusqu'à 1M) — il devient aussi un peu plus dodu.
 
 import { useEffect, useRef } from 'react';
-import { Application, Container, Sprite, Texture } from 'pixi.js';
+import { Application, Container, Sprite, Text, Texture } from 'pixi.js';
 import type { Genome, StageCode, VisibleState } from '../game/types';
 import { ENEMY_PALETTE, ENEMY_SPRITES, enemyMotion } from './enemies';
 import { gridToCanvas } from './pixel';
@@ -31,6 +31,8 @@ interface Props {
   onDefend?: () => void;
   onCollect?: () => void;
   onTap?: () => void;
+  onPetTap?: () => void;
+  clickFx?: { amount: number; crit: boolean; seq: number } | null;
   skills?: string[];
 }
 
@@ -170,6 +172,10 @@ const CRUMB_SOURCE: [number, number] = [STAGE_W / 2, STAGE_H - 70];
 const FLIGHT_MS = 600;
 const FADE_MS = 400;
 
+/** Texte flottant « +N » au clic : monte et s'efface, même souffle que les miettes ramassées. */
+const CLICK_FX_MS = 600;
+const CLICK_FX_RISE = 34;
+
 const crumbTexturesCache = new Map<string, Texture[]>();
 
 function getCrumbTexturesForType(type: CrumbVisualType): Texture[] {
@@ -205,6 +211,12 @@ interface Anim {
   blinkUntil: number;
 }
 
+interface FloatingText {
+  text: Text;
+  start: number;
+  startY: number;
+}
+
 function toTexture(canvas: HTMLCanvasElement): Texture {
   const tex = Texture.from(canvas);
   tex.source.scaleMode = 'nearest';
@@ -223,18 +235,23 @@ export function PetStage({
   onDefend,
   onCollect,
   onTap,
+  onPetTap,
+  clickFx,
   skills = [],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const spriteRef = useRef<Sprite | null>(null);
   const crumbLayerRef = useRef<Container | null>(null);
+  const fxLayerRef = useRef<Container | null>(null);
   const animRef = useRef<Anim | null>(null);
   const growthRef = useRef(growth);
   const stageRef = useRef(stage);
   const onCollectRef = useRef(onCollect);
   const onDefendRef = useRef(onDefend);
   onDefendRef.current = onDefend;
+  const onPetTapRef = useRef(onPetTap);
+  onPetTapRef.current = onPetTap;
   const enemyRef = useRef<{ id: string; sprite: Sprite } | null>(null);
   const enemyLayerRef = useRef<Container | null>(null);
   const childrenRef = useRef(children);
@@ -244,6 +261,7 @@ export function PetStage({
   const childLayerRef = useRef<Container | null>(null);
   const heightsRef = useRef<number[]>(new Array(BUCKETS).fill(0));
   const leavingRef = useRef<Array<{ sprite: Sprite; start: number }>>([]);
+  const floatingTextRef = useRef<FloatingText[]>([]);
   const timeRef = useRef(0);
   growthRef.current = growth;
   stageRef.current = stage;
@@ -289,6 +307,9 @@ export function PetStage({
       const sprite = new Sprite();
       sprite.anchor.set(0.5, 1);
       sprite.position.set(STAGE_W / 2, STAGE_H - 4);
+      sprite.eventMode = 'static';
+      sprite.cursor = 'pointer';
+      sprite.on('pointertap', () => onPetTapRef.current?.());
       a.stage.addChild(sprite);
       spriteRef.current = sprite;
 
@@ -300,6 +321,11 @@ export function PetStage({
       a.stage.addChild(enemyLayer);
       enemyLayerRef.current = enemyLayer;
       spawnEnemy(threatIdRef.current);
+
+      // Texte flottant « +N » du clic, toujours au-dessus de tout le reste.
+      const fxLayer = new Container();
+      a.stage.addChild(fxLayer);
+      fxLayerRef.current = fxLayer;
 
       let t = 0;
       a.ticker.add((ticker) => {
@@ -418,6 +444,18 @@ export function PetStage({
           l.sprite.position.y -= 1.2;
           return true;
         });
+
+        // Texte de clic : monte et s'efface, même souffle que les miettes ramassées.
+        floatingTextRef.current = floatingTextRef.current.filter((f) => {
+          const p = (t - f.start) / CLICK_FX_MS;
+          if (p >= 1) {
+            f.text.destroy();
+            return false;
+          }
+          f.text.alpha = 1 - p;
+          f.text.position.y = f.startY - p * CLICK_FX_RISE;
+          return true;
+        });
       });
     })();
 
@@ -431,6 +469,8 @@ export function PetStage({
       leavingRef.current = [];
       enemyLayerRef.current = null;
       enemyRef.current = null;
+      fxLayerRef.current = null;
+      floatingTextRef.current = [];
       app?.destroy(true);
     };
   }, []);
@@ -495,6 +535,32 @@ export function PetStage({
     spawnEnemy(threatId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threatId]);
+
+  // « +N » flottant au clic — jamais au montage (clickFx démarre à null).
+  useEffect(() => {
+    if (!clickFx) return;
+    const layer = fxLayerRef.current;
+    const sprite = spriteRef.current;
+    if (!layer || !sprite) return;
+    const crit = clickFx.crit;
+    const text = new Text({
+      text: `+${Math.round(clickFx.amount)}`,
+      style: {
+        fontFamily: 'monospace',
+        fontSize: crit ? 24 : 15,
+        fontWeight: 'bold',
+        fill: crit ? '#ffc233' : '#ffffff',
+        stroke: { color: '#3a2a1a', width: crit ? 4 : 3 },
+      },
+    });
+    text.anchor.set(0.5);
+    const offsetX = Math.random() * 40 - 20;
+    const startY = sprite.position.y - sprite.height - 10;
+    text.position.set(sprite.position.x + offsetX, startY);
+    layer.addChild(text);
+    floatingTextRef.current.push({ text, start: timeRef.current, startY });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clickFx?.seq]);
 
   // Synchronise les sprites de miettes avec le compte disponible (1 pour 1) :
   // les nouvelles VOLENT depuis le Compagnon vers une colonne aléatoire et se

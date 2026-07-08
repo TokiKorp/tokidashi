@@ -12,6 +12,7 @@ import {
   buyChild as buyChildAction,
   buyCosmetic as buyCosmeticAction,
   buyTurret as buyTurretAction,
+  clickPet as clickPetAction,
   collectCrumbs,
   createCompanion,
   equipCosmetic as equipCosmeticAction,
@@ -25,7 +26,7 @@ import {
 import { DEFAULT_CONFIG, eventById, foodById, skillById, PRESTIGE_SKILLS, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
 import { moodBucket, reactionTier } from '../game/reactions';
-import { advanceSim, defendEvent, scheduleNextEvent, effectiveFoodCost, skillModifiers, upgradeCost } from '../game/sim';
+import { advanceSim, defendEvent, passiveWalletIncome, scheduleNextEvent, effectiveFoodCost, skillModifiers, upgradeCost } from '../game/sim';
 import type { GameState, SimEvent, StageCode } from '../game/types';
 import { clearSave, loadSave, writeSave } from './persist';
 
@@ -45,6 +46,7 @@ interface TokidachiStore {
   locked: boolean;
   reaction: ReactionBubble | null;
   notice: string | null;
+  clickFx: { amount: number; crit: boolean; seq: number } | null;
   language: 'fr' | 'en';
   notificationsEnabled: boolean;
   notifyThingsDone: boolean;
@@ -62,6 +64,7 @@ interface TokidachiStore {
   tapEgg(): void;
   feed(foodId: string): Promise<void>;
   play(): void;
+  clickPet(): void;
   collect(): void;
   learn(skillId: string): void;
   upgrade(skillId: string): void;
@@ -192,6 +195,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   locked: false,
   reaction: null,
   notice: null,
+  clickFx: null,
   language: 'fr',
   notificationsEnabled: true,
   notifyThingsDone: true,
@@ -248,22 +252,11 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
 
     if (!c || c.dead) {
       const next = structuredClone(game);
-      const s = dtSeconds * cfg.simSpeed;
-      let crumbsEarned = 0;
-      const HOUR = 3600;
-      
-      if (next.wallet.pea && next.wallet.pea > 0) {
-        crumbsEarned += (next.wallet.pea * 0.05 / HOUR) * s;
-      }
-      
-      if (next.prestigeSkills?.includes('graveyard') && next.memorial && next.memorial.length > 0) {
-        const graveyardRate = next.memorial.reduce(
-          (sum, m) => sum + Math.max(5, Math.floor(m.activeSeconds / 3600) * 0.5),
-          0
-        );
-        crumbsEarned += (graveyardRate / HOUR) * s;
-      }
-      
+      next.wallet.memorial = next.memorial;
+      next.wallet.prestigeSkills = next.prestigeSkills;
+      const s = dtSeconds * cfg.simSpeed * cfg.baseTimeScale;
+      const crumbsEarned = passiveWalletIncome(next.wallet, s);
+
       if (crumbsEarned > 0) {
         next.wallet.crumbs += crumbsEarned;
         set({ game: next });
@@ -540,6 +533,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       return;
     }
     set({ game: next });
+  },
+
+  clickPet() {
+    const { game, cfg } = get();
+    if (!game.companion || game.companion.dead || game.companion.stage === 'egg') return;
+    const next = structuredClone(game);
+    const res = clickPetAction(next.companion!, next.wallet, cfg);
+    if (!res.ok) return;
+    const { amount, crit } = res.events[0]?.data as { amount: number; crit: boolean };
+    set({ game: next, clickFx: { amount, crit, seq: (get().clickFx?.seq ?? 0) + 1 } });
   },
 
   collect() {

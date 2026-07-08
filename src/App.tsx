@@ -24,7 +24,7 @@ type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | null;
 
 export default function App() {
   const store = useTokidachi();
-  const { loaded, game, cfg, locked, reaction, notice, language } = store;
+  const { loaded, game, cfg, locked, reaction, notice, language, clickFx, clickPet } = store;
   const t = TRANSLATIONS[language];
   const [panel, setPanel] = useState<OpenPanel>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -96,6 +96,8 @@ export default function App() {
           onDefend={store.defend}
           onCollect={c.pendingCrumbs >= 1 ? store.collect : undefined}
           onTap={c.stage === 'egg' ? store.tapEgg : undefined}
+          onPetTap={c.stage === 'egg' ? undefined : clickPet}
+          clickFx={clickFx}
           skills={c.skills.filter(sp => sp.state === 'owned').map(sp => sp.skillId)}
         />
         {reaction && (
