@@ -99,7 +99,7 @@ mod session_lock {
 #[cfg(target_os = "macos")]
 fn assert_overlay_level(window: &tauri::WebviewWindow) {
     let window = window.clone();
-    let _ = window.run_on_main_thread(move || {
+    let _ = window.clone().run_on_main_thread(move || {
         use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
         use cocoa::base::id;
         if let Ok(ns_window_ptr) = window.ns_window() {
