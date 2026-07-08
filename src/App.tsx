@@ -221,7 +221,8 @@ export default function App() {
         </div>
       )}
 
-      <section className="hud" hidden={!hudVisible}>
+      {hudVisible && (
+      <section className="hud">
         <DragBar
           title={
             <>
@@ -308,6 +309,7 @@ export default function App() {
           {cfg.simSpeed !== 1 && <span className="badge-dev">×{cfg.simSpeed}</span>}
         </footer>
       </section>
+      )}
 
       {panel === 'feed' && <FeedMenu onClose={() => setPanel(null)} />}
       {panel === 'skills' && <SkillPanel onClose={() => setPanel(null)} />}
