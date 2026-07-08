@@ -33,7 +33,7 @@ interface FaceAnchors {
   topRow: number;
 }
 
-function palette(g: Genome): Record<string, string> {
+export function palette(g: Genome): Record<string, string> {
   return {
     '.': 'transparent',
     o: `hsl(${g.hue} 30% 28%)`,
@@ -53,11 +53,23 @@ function palette(g: Genome): Record<string, string> {
     C: '#66c7d6',
     M: '#b06fd8',
     R: '#e05263',
+    // Cosmétiques — ombres/reflets (paires sombre/clair par teinte de base)
+    Z: '#15151c',
+    I: '#6e6e82',
+    G: '#a8781f',
+    H: '#fbe27e',
+    D: '#2f8fa0',
+    L: '#a8e6ef',
+    N: '#7c3f96',
+    P: '#dba8f0',
+    F: '#a52a3d',
+    T: '#ff7a90',
+    J: '#3ecf8e',
   };
 }
 
 /** Papy : pelage grisonnant, mais toujours sa teinte (GDD §4.3). */
-function grandpaPalette(g: Genome): Record<string, string> {
+export function grandpaPalette(g: Genome): Record<string, string> {
   return {
     ...palette(g),
     b: `hsl(${g.hue} 18% 80%)`,
@@ -274,78 +286,140 @@ function facePatches(state: Exclude<VisibleState, 'egg'>, f: FaceAnchors): Patch
 
 // ——— Cosmétiques (GDD §6.3) : patches paramétriques par article ———
 
-const COSMETIC_PATCHES: Record<string, (f: FaceAnchors) => Patch[]> = {
+export const COSMETIC_PATCHES: Record<string, (f: FaceAnchors) => Patch[]> = {
   beret: (f) => {
-    const out: Patch[] = [];
-    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 2; x++) out.push([f.topRow - 1, x, 'R']);
-    out.push([f.topRow - 2, Math.round(CX), 'R']);
-    return out;
+    const cx = Math.round(CX);
+    return [
+      [f.topRow - 4, cx, 'A'],
+      [f.topRow - 3, cx - 3, 'T'], [f.topRow - 3, cx - 2, 'T'], [f.topRow - 3, cx - 1, 'R'],
+      [f.topRow - 3, cx, 'R'], [f.topRow - 3, cx + 1, 'R'],
+      [f.topRow - 2, cx - 3, 'T'], [f.topRow - 2, cx - 2, 'R'], [f.topRow - 2, cx - 1, 'R'], [f.topRow - 2, cx, 'R'],
+      [f.topRow - 2, cx + 1, 'F'], [f.topRow - 2, cx + 2, 'F'], [f.topRow - 2, cx + 3, 'F'],
+      [f.topRow - 1, cx + 2, 'F'], [f.topRow - 1, cx + 3, 'F'], [f.topRow - 1, cx + 4, 'F'],
+    ];
   },
-  'party-hat': (f) => [
-    [f.topRow - 1, Math.round(CX) - 1, 'M'], [f.topRow - 1, Math.round(CX), 'M'],
-    [f.topRow - 1, Math.round(CX) + 1, 'M'], [f.topRow - 2, Math.round(CX), 'M'],
-    [f.topRow - 3, Math.round(CX), 'Y'],
-  ],
+  'party-hat': (f) => {
+    const cx = Math.round(CX);
+    return [
+      [f.topRow - 1, cx - 3, 'N'], [f.topRow - 1, cx - 2, 'M'], [f.topRow - 1, cx - 1, 'H'],
+      [f.topRow - 1, cx, 'M'], [f.topRow - 1, cx + 1, 'H'], [f.topRow - 1, cx + 2, 'M'], [f.topRow - 1, cx + 3, 'N'],
+      [f.topRow - 2, cx - 2, 'N'], [f.topRow - 2, cx - 1, 'M'], [f.topRow - 2, cx, 'H'],
+      [f.topRow - 2, cx + 1, 'M'], [f.topRow - 2, cx + 2, 'N'],
+      [f.topRow - 3, cx - 1, 'M'], [f.topRow - 3, cx, 'H'], [f.topRow - 3, cx + 1, 'M'],
+      [f.topRow - 4, cx, 'H'],
+      [f.topRow - 5, cx, 'w'],
+    ];
+  },
   'top-hat': (f) => {
+    const cx = Math.round(CX);
     const out: Patch[] = [];
-    for (let x = Math.round(CX) - 4; x <= Math.round(CX) + 4; x++) out.push([f.topRow - 1, x, 'A']);
-    for (let y = f.topRow - 3; y <= f.topRow - 2; y++) {
-      for (let x = Math.round(CX) - 2; x <= Math.round(CX) + 2; x++) out.push([y, x, 'A']);
+    for (const y of [f.topRow - 4, f.topRow - 3]) {
+      out.push([y, cx - 2, 'A'], [y, cx - 1, 'I'], [y, cx, 'A'], [y, cx + 1, 'A'], [y, cx + 2, 'Z']);
     }
+    for (let x = cx - 2; x <= cx + 2; x++) out.push([f.topRow - 2, x, 'F']);
+    out.push([f.topRow - 1, cx - 4, 'Z']);
+    for (let x = cx - 3; x <= cx + 3; x++) out.push([f.topRow - 1, x, 'A']);
+    out.push([f.topRow - 1, cx + 4, 'Z']);
     return out;
   },
   bandana: (f) => {
-    const out: Patch[] = [];
-    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.topRow, x, 'C']);
-    out.push([f.topRow + 1, Math.round(CX) + 4, 'C']);
-    return out;
+    const cx = Math.round(CX);
+    return [
+      [f.topRow - 1, cx - 3, 'L'], [f.topRow - 1, cx - 2, 'L'], [f.topRow - 1, cx - 1, 'L'],
+      [f.topRow - 1, cx, 'L'], [f.topRow - 1, cx + 1, 'L'], [f.topRow - 1, cx + 2, 'L'], [f.topRow - 1, cx + 3, 'L'],
+      [f.topRow, cx - 3, 'C'], [f.topRow, cx - 2, 'w'], [f.topRow, cx - 1, 'C'], [f.topRow, cx, 'C'],
+      [f.topRow, cx + 1, 'w'], [f.topRow, cx + 2, 'C'], [f.topRow, cx + 3, 'C'],
+      [f.topRow + 1, cx - 2, 'D'], [f.topRow + 1, cx - 1, 'D'], [f.topRow + 1, cx, 'D'],
+      [f.topRow + 1, cx + 1, 'D'], [f.topRow + 1, cx + 2, 'D'],
+      [f.topRow + 1, cx + 4, 'C'], [f.topRow + 2, cx + 4, 'D'], [f.topRow + 2, cx + 5, 'C'], [f.topRow + 3, cx + 4, 'D'],
+    ];
   },
   crown: (f) => {
-    const out: Patch[] = [];
-    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.topRow - 1, x, 'Y']);
-    for (const dx of [-3, 0, 3]) out.push([f.topRow - 2, Math.round(CX) + dx, 'Y']);
-    return out;
+    const cx = Math.round(CX);
+    return [
+      [f.topRow - 2, cx - 3, 'H'], [f.topRow - 2, cx, 'H'], [f.topRow - 2, cx + 3, 'H'],
+      [f.topRow - 1, cx - 3, 'H'], [f.topRow - 1, cx - 2, 'Y'], [f.topRow - 1, cx - 1, 'R'],
+      [f.topRow - 1, cx, 'Y'], [f.topRow - 1, cx + 1, 'C'], [f.topRow - 1, cx + 2, 'Y'], [f.topRow - 1, cx + 3, 'H'],
+      [f.topRow, cx - 3, 'G'], [f.topRow, cx - 2, 'G'], [f.topRow, cx - 1, 'G'],
+      [f.topRow, cx, 'J'], [f.topRow, cx + 1, 'G'], [f.topRow, cx + 2, 'G'], [f.topRow, cx + 3, 'G'],
+    ];
   },
   halo: (f) => {
-    const out: Patch[] = [];
-    for (let x = Math.round(CX) - 2; x <= Math.round(CX) + 2; x++) out.push([f.topRow - 4, x, 'Y']);
-    return out;
+    const cx = Math.round(CX);
+    return [
+      [f.topRow - 6, cx, 'w'],
+      [f.topRow - 5, cx - 4, 'w'], [f.topRow - 5, cx - 3, 'Y'], [f.topRow - 5, cx - 2, 'H'], [f.topRow - 5, cx - 1, 'Y'],
+      [f.topRow - 5, cx, 'H'], [f.topRow - 5, cx + 1, 'Y'], [f.topRow - 5, cx + 2, 'H'], [f.topRow - 5, cx + 3, 'Y'],
+      [f.topRow - 5, cx + 4, 'w'],
+      [f.topRow - 4, cx - 2, 'G'], [f.topRow - 4, cx - 1, 'Y'], [f.topRow - 4, cx, 'H'],
+      [f.topRow - 4, cx + 1, 'Y'], [f.topRow - 4, cx + 2, 'G'],
+    ];
   },
   sunglasses: (f) => {
+    const cx = Math.round(CX);
     const out: Patch[] = [];
     for (const ex of [f.elx, f.erx]) {
-      for (let x = ex - 1; x <= ex + 2; x++) out.push([f.eyeY, x, 'A']);
-      out.push([f.eyeY + 1, ex, 'A'], [f.eyeY + 1, ex + 1, 'A']);
+      out.push(
+        [f.eyeY - 1, ex - 1, 'Z'], [f.eyeY - 1, ex, 'Z'], [f.eyeY - 1, ex + 1, 'Z'], [f.eyeY - 1, ex + 2, 'Z'],
+        [f.eyeY, ex - 1, 'Z'], [f.eyeY, ex, 'A'], [f.eyeY, ex + 1, 'A'], [f.eyeY, ex + 2, 'Z'],
+        [f.eyeY + 1, ex - 1, 'Z'], [f.eyeY + 1, ex, 'd'], [f.eyeY + 1, ex + 1, 'd'], [f.eyeY + 1, ex + 2, 'Z'],
+      );
     }
-    out.push([f.eyeY, Math.round(CX) - 1, 'A'], [f.eyeY, Math.round(CX), 'A']);
+    out.push(
+      [f.eyeY, cx - 1, 'Z'], [f.eyeY, cx, 'Z'],
+      [f.eyeY, f.elx - 2, 'A'], [f.eyeY, f.erx + 3, 'A'],
+      [f.eyeY, f.erx + 1, 'w'],
+    );
     return out;
   },
   monocle: (f) => [
-    [f.eyeY - 1, f.erx - 1, 'Y'], [f.eyeY - 1, f.erx + 2, 'Y'],
-    [f.eyeY + 2, f.erx - 1, 'Y'], [f.eyeY + 2, f.erx + 2, 'Y'],
-    [f.eyeY + 3, f.erx + 3, 'Y'],
+    [f.eyeY - 1, f.erx - 1, 'Y'], [f.eyeY - 1, f.erx, 'Y'], [f.eyeY - 1, f.erx + 1, 'Y'], [f.eyeY - 1, f.erx + 2, 'Y'],
+    [f.eyeY, f.erx - 1, 'Y'], [f.eyeY, f.erx, 'd'], [f.eyeY, f.erx + 1, 'd'], [f.eyeY, f.erx + 2, 'Y'],
+    [f.eyeY + 1, f.erx - 1, 'Y'], [f.eyeY + 1, f.erx, 'd'], [f.eyeY + 1, f.erx + 1, 'd'], [f.eyeY + 1, f.erx + 2, 'Y'],
+    [f.eyeY + 2, f.erx - 1, 'Y'], [f.eyeY + 2, f.erx, 'Y'], [f.eyeY + 2, f.erx + 1, 'Y'], [f.eyeY + 2, f.erx + 2, 'Y'],
+    [f.eyeY + 3, f.erx + 2, 'A'], [f.eyeY + 4, f.erx + 3, 'A'], [f.eyeY + 5, f.erx + 4, 'A'],
   ],
   flower: (f) => [
-    [f.topRow, f.elx - 2, 'M'], [f.topRow - 1, f.elx - 3, 'M'],
-    [f.topRow - 1, f.elx - 1, 'M'], [f.topRow - 2, f.elx - 2, 'M'],
-    [f.topRow - 1, f.elx - 2, 'Y'],
+    [f.topRow - 1, f.elx - 2, 'H'],
+    [f.topRow - 2, f.elx - 3, 'G'], [f.topRow - 2, f.elx - 1, 'G'], [f.topRow, f.elx - 3, 'G'], [f.topRow, f.elx - 1, 'G'],
+    [f.topRow - 3, f.elx - 2, 'M'], [f.topRow - 4, f.elx - 2, 'P'],
+    [f.topRow + 1, f.elx - 2, 'M'], [f.topRow + 2, f.elx - 2, 'P'],
+    [f.topRow - 1, f.elx - 4, 'M'], [f.topRow - 1, f.elx - 5, 'P'],
+    [f.topRow - 1, f.elx, 'M'], [f.topRow - 1, f.elx + 1, 'P'],
+    [f.topRow + 3, f.elx - 2, 'g'], [f.topRow + 4, f.elx - 2, 'g'], [f.topRow + 3, f.elx - 1, 'g'],
   ],
-  bow: (f) => [
-    [f.mouthY + 2, Math.round(CX) - 2, 'R'], [f.mouthY + 3, Math.round(CX) - 2, 'R'],
-    [f.mouthY + 2, Math.round(CX) + 2, 'R'], [f.mouthY + 3, Math.round(CX) + 2, 'R'],
-    [f.mouthY + 2, Math.round(CX), 'A'],
-  ],
+  bow: (f) => {
+    const cx = Math.round(CX);
+    return [
+      [f.mouthY + 2, cx - 3, 'T'], [f.mouthY + 2, cx - 2, 'T'],
+      [f.mouthY + 3, cx - 3, 'R'], [f.mouthY + 3, cx - 2, 'R'],
+      [f.mouthY + 4, cx - 3, 'F'], [f.mouthY + 4, cx - 2, 'F'],
+      [f.mouthY + 2, cx + 2, 'T'], [f.mouthY + 2, cx + 3, 'T'],
+      [f.mouthY + 3, cx + 2, 'R'], [f.mouthY + 3, cx + 3, 'R'],
+      [f.mouthY + 4, cx + 2, 'F'], [f.mouthY + 4, cx + 3, 'F'],
+      [f.mouthY + 3, cx - 1, 'A'], [f.mouthY + 3, cx, 'A'], [f.mouthY + 3, cx + 1, 'A'],
+      [f.mouthY + 2, cx, 'w'],
+    ];
+  },
   scarf: (f) => {
+    const cx = Math.round(CX);
     const out: Patch[] = [];
-    for (let x = Math.round(CX) - 4; x <= Math.round(CX) + 4; x++) out.push([f.mouthY + 2, x, 'R']);
-    out.push([f.mouthY + 3, Math.round(CX) + 3, 'R'], [f.mouthY + 4, Math.round(CX) + 3, 'R']);
+    for (let x = cx - 3; x <= cx + 3; x++) out.push([f.mouthY + 1, x, 'T']);
+    for (let x = cx - 4; x <= cx + 4; x++) out.push([f.mouthY + 2, x, (x - cx) % 2 === 0 ? 'R' : 'F']);
+    for (let x = cx - 4; x <= cx + 4; x++) out.push([f.mouthY + 3, x, (x - cx) % 2 === 0 ? 'F' : 'R']);
+    out.push([f.mouthY + 4, cx + 4, 'R'], [f.mouthY + 5, cx + 3, 'F'], [f.mouthY + 5, cx + 4, 'R']);
     return out;
   },
   'gold-chain': (f) => {
-    const out: Patch[] = [];
-    for (let x = Math.round(CX) - 3; x <= Math.round(CX) + 3; x++) out.push([f.mouthY + 2, x, 'Y']);
-    out.push([f.mouthY + 3, Math.round(CX), 'Y']);
-    return out;
+    const cx = Math.round(CX);
+    return [
+      [f.mouthY + 2, cx - 3, 'H'], [f.mouthY + 2, cx - 2, 'G'], [f.mouthY + 2, cx - 1, 'H'],
+      [f.mouthY + 2, cx, 'G'], [f.mouthY + 2, cx + 1, 'H'], [f.mouthY + 2, cx + 2, 'G'], [f.mouthY + 2, cx + 3, 'H'],
+      [f.mouthY + 3, cx - 2, 'G'], [f.mouthY + 3, cx - 1, 'H'], [f.mouthY + 3, cx, 'G'],
+      [f.mouthY + 3, cx + 1, 'H'], [f.mouthY + 3, cx + 2, 'G'],
+      [f.mouthY + 4, cx, 'G'],
+      [f.mouthY + 5, cx, 'J'], [f.mouthY + 5, cx + 1, 'w'],
+    ];
   },
 };
 

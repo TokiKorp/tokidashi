@@ -3,9 +3,10 @@
 // corps, grille complète).
 
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_CONFIG } from '../game/config';
 import type { Genome, VisibleState } from '../game/types';
 import { ENEMY_SPRITES } from './enemies';
-import { buildSpriteGrid, GRID } from './sprites';
+import { buildSpriteGrid, COSMETIC_PATCHES, GRID, grandpaPalette, palette } from './sprites';
 
 const STATES: Exclude<VisibleState, 'egg'>[] = [
   'happy', 'neutral', 'hungry', 'grumpy', 'sick', 'working', 'dead',
@@ -82,5 +83,44 @@ describe('sprite procédural', () => {
     const a = buildSpriteGrid('neutral', 'blob', genome({ shape: 0, spots: false, earStyle: 0 }));
     const b = buildSpriteGrid('neutral', 'blob', genome({ shape: 2, spots: false, earStyle: 2 }));
     expect(a.join('\n')).not.toBe(b.join('\n'));
+  });
+});
+
+describe('cosmétiques', () => {
+  it('COSMETIC_PATCHES couvre exactement les cosmétiques de la config', () => {
+    const configIds = DEFAULT_CONFIG.cosmetics.map((c) => c.id).sort();
+    const patchIds = Object.keys(COSMETIC_PATCHES).sort();
+    expect(patchIds).toEqual(configIds);
+  });
+
+  it('chaque cosmétique produit une grille 20×20 bien formée sur plusieurs génomes/stades', () => {
+    const genomes = [
+      genome({ shape: 0, hue: 10, earStyle: 0, spots: false }),
+      genome({ shape: 1, hue: 160, earStyle: 1, spots: true, seed: 99 }),
+      genome({ shape: 2, hue: 260, earStyle: 2, spots: false, seed: 7 }),
+    ];
+    const stages = ['blob', 'kid', 'teen', 'adult', 'grandpa'] as const;
+    for (const g of genomes) {
+      for (const stage of stages) {
+        for (const id of Object.keys(COSMETIC_PATCHES)) {
+          const grid = buildSpriteGrid('neutral', stage, g, 0, [id]);
+          expect(grid.length, `${id}/${stage}`).toBe(GRID);
+          for (const row of grid) expect(row.length, `${id}/${stage}`).toBe(GRID);
+        }
+      }
+    }
+  });
+
+  it('tout caractère émis par un patch cosmétique existe dans la palette (normale et papy)', () => {
+    const anchors = { eyeY: 8, elx: 5, erx: 12, mouthY: 11, topRow: 3 };
+    const g = genome({});
+    const validNormal = new Set(Object.keys(palette(g)));
+    const validGrandpa = new Set(Object.keys(grandpaPalette(g)));
+    for (const [id, fn] of Object.entries(COSMETIC_PATCHES)) {
+      for (const [, , char] of fn(anchors)) {
+        expect(validNormal.has(char), `${id} → '${char}' absent de palette()`).toBe(true);
+        expect(validGrandpa.has(char), `${id} → '${char}' absent de grandpaPalette()`).toBe(true);
+      }
+    }
   });
 });
