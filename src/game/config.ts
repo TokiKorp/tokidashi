@@ -4,7 +4,6 @@
 import type {
   ContainerDef,
   CosmeticDef,
-  WeaponDef,
   EventDef,
   FoodDef,
   SkillCategory,
@@ -19,8 +18,6 @@ export interface GameConfig {
   foods: FoodDef[];
   skills: SkillDef[];
   cosmetics: CosmeticDef[];
-  /** Armurerie anti-OVNI (boutique). */
-  weapons: WeaponDef[];
   events: EventDef[];
 
   /** Nombre de tapotements pour faire éclore l'œuf. */
@@ -89,6 +86,9 @@ export interface GameConfig {
 
   /** Chaîne des contenants à Miettes (multiplie le plafond du pot). */
   containers: ContainerDef[];
+
+  /** Tourelle anti-OVNI : coût en TOKEN, croissance géométrique, chance d'interception par niveau. */
+  turret: { maxLevel: number; baseCost: number; costGrowth: number; chancePerLevel: number };
 
   devCapacityBudget: number;
   simSpeed: number;
@@ -415,41 +415,12 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'gold-chain', label: 'Chaîne en or', emoji: '⛓️', slot: 'neck', currency: 'token', cost: 30_000 },
   ],
 
-  // Armurerie anti-OVNI : chaque arme ajoute sa chance de repousser la soucoupe.
-  weapons: [
-    {
-      id: 'fronde',
-      label: 'Fronde anti-OVNI',
-      emoji: '🎯',
-      description: 'Un caillou bien placé dans le hublot. +25 % de chances de repousser un OVNI.',
-      currency: 'crumbs',
-      cost: 800,
-      ufoDefense: 0.25,
-    },
-    {
-      id: 'canon-baguettes',
-      label: 'Canon à baguettes',
-      emoji: '🥖',
-      description: 'Tir tendu de baguettes tradition. +30 % de chances de repousser un OVNI.',
-      currency: 'crumbs',
-      cost: 4_000,
-      ufoDefense: 0.3,
-    },
-    {
-      id: 'laser-grenier',
-      label: 'Laser de grenier',
-      emoji: '🔆',
-      description: 'Monté sur le toit, alimenté aux Miettes. +35 % de chances de repousser un OVNI.',
-      currency: 'crumbs',
-      cost: 25_000,
-      ufoDefense: 0.35,
-    },
-  ],
+  turret: { maxLevel: 5, baseCost: 500, costGrowth: 1.8, chancePerLevel: 0.2 },
 
   // Événements aléatoires — menaces (cliquer pour défendre) et aubaines.
   events: [
     { id: 'crumb-thief', label: 'Corbeau chapardeur', emoji: '🐦‍⬛', kind: 'threat', weight: 4, threatText: 'Il vise le pot de Miettes !' },
-    { id: 'ant-invasion', label: 'Invasion de fourmis', emoji: '🐜', kind: 'threat', weight: 3, threatText: 'Elles marchent sur le portefeuille !' },
+    { id: 'ant-invasion', label: 'Invasion de fourmis', emoji: '🐜', kind: 'threat', weight: 3, threatText: 'Elles grimpent sur le pot de Miettes !' },
     { id: 'greedy-pigeon', label: 'Pigeon glouton', emoji: '🐦', kind: 'threat', weight: 3, threatText: 'Il veut lui voler son goûter !' },
     { id: 'ufo-abduction', label: 'OVNI kidnappeur', emoji: '🛸', kind: 'threat', weight: 3, threatText: 'Il vise un petit !', requiresChildren: true },
     { id: 'crumb-rain', label: 'Pluie de miettes', emoji: '🌧️', kind: 'boon', weight: 2 },
@@ -542,6 +513,11 @@ export function eventById(cfg: GameConfig, id: string): EventDef | undefined {
 /** Prix du prochain petit : double à chaque adoption. */
 export function childCost(cfg: GameConfig, currentChildren: number): number {
   return cfg.childBaseCost * Math.pow(2, currentChildren);
+}
+
+/** Prix en TOKEN pour faire passer la tourelle du niveau `level` à `level + 1`. */
+export function turretCost(cfg: GameConfig, level: number): number {
+  return Math.round(cfg.turret.baseCost * Math.pow(cfg.turret.costGrowth, level));
 }
 
 export interface PrestigeSkillDef {

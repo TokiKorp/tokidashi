@@ -16,8 +16,16 @@ export class RealCliProvider implements AIProvider {
       };
     }
 
-    // 1. Choose CLI and get a stupid random question
     const store = liveStore();
+    const { devMode, game } = store.getState();
+    if (devMode && game.capacity.unlimited) {
+      return {
+        text: pickScriptedReaction(ctx.tier, ctx.moodBucket, ctx.stage),
+        source: 'scripted',
+      };
+    }
+
+    // 1. Choose CLI and get a stupid random question
     const selectedCli = store.getState().selectedCli;
     const cli = selectedCli === 'random' ? pickCli() : selectedCli;
     const question = pickRandomQuestion();

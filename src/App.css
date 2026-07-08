@@ -515,7 +515,6 @@ button:disabled {
 /* ——— Nourriture ——— */
 .food-list,
 .skill-list,
-.report-list,
 .memorial ul {
   list-style: none;
   padding: 0;
@@ -846,8 +845,4 @@ button:disabled {
   font-size: 12px;
   z-index: 20;
   animation: pop 0.15s ease-out;
-}
-
-.report li {
-  font-size: 13px;
 }

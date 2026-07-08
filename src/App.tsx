@@ -14,7 +14,6 @@ import { formatActiveDuration, formatCrumbs, formatTokens } from './ui/format';
 import { Gauge } from './ui/Gauge';
 import { ICON_FEED, ICON_PLAY, ICON_SHOP, ICON_TREE, ICON_TOKEN, ICON_CRUMB, ICON_GEAR, ICON_BOOK } from './ui/icons';
 import { PixelIcon } from './ui/PixelIcon';
-import { ReportModal } from './ui/ReportModal';
 import { AdoptScreen, DeathScreen } from './ui/Screens';
 import { ShopPanel } from './ui/ShopPanel';
 import { SkillPanel } from './ui/SkillPanel';
@@ -25,7 +24,7 @@ type OpenPanel = 'feed' | 'skills' | 'shop' | 'dev' | 'cloud' | null;
 
 export default function App() {
   const store = useTokidachi();
-  const { loaded, game, cfg, locked, reaction, notice, report, language } = store;
+  const { loaded, game, cfg, locked, reaction, notice, language } = store;
   const t = TRANSLATIONS[language];
   const [panel, setPanel] = useState<OpenPanel>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -316,7 +315,6 @@ export default function App() {
       {panel === 'shop' && <ShopPanel onClose={() => setPanel(null)} />}
       {panel === 'dev' && <DevPanel onClose={() => setPanel(null)} />}
       {panel === 'cloud' && <CloudPanel onClose={() => setPanel(null)} />}
-      {report && <ReportModal report={report} />}
       {notice && <div className="toast">{notice}</div>}
     </div>
   );

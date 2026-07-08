@@ -12,7 +12,7 @@ on:
 
 jobs:
   validate-rust-linux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, docker, proxmox]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
             echo "TAP_GITHUB_TOKEN is not set. Skipping automated Homebrew Cask update."
             echo "To enable automatic updates, create a GitHub Personal Access Token (PAT) with repo scope,"
             echo "add it as a secret named TAP_GITHUB_TOKEN in this repository, and ensure the"
-            echo "public tap repository 'basilelt/homebrew-tap' exists."
+            echo "public tap repository 'TokiKorp/homebrew-tap' exists."
             exit 0
           fi
 
@@ -114,7 +114,7 @@ jobs:
           echo "Cask download filename: $URL_FILENAME"
 
           # Clone the tap repository
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/basilelt/homebrew-tap.git" homebrew-tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/TokiKorp/homebrew-tap.git" homebrew-tap
           cd homebrew-tap
 
           # Create Casks folder if not exists
@@ -126,10 +126,10 @@ jobs:
             version "${VERSION}"
             sha256 "${SHA256}"
 
-            url "https://github.com/oncleguigs/tokidachi/releases/download/v#{version}/${URL_FILENAME}"
+            url "https://github.com/TokiKorp/tokidashi/releases/download/v#{version}/${URL_FILENAME}"
             name "Tokidachi"
             desc "Desktop companion idle + care"
-            homepage "https://github.com/oncleguigs/tokidachi"
+            homepage "https://github.com/TokiKorp/tokidashi"
 
             app "Tokidachi.app"
 

@@ -11,7 +11,7 @@ import { runCliQuery, pickCli, pickRandomQuestion, shortenResponse } from '../ai
 import {
   buyChild as buyChildAction,
   buyCosmetic as buyCosmeticAction,
-  buyWeapon as buyWeaponAction,
+  buyTurret as buyTurretAction,
   collectCrumbs,
   createCompanion,
   equipCosmetic as equipCosmeticAction,
@@ -29,22 +29,6 @@ import { advanceSim, defendEvent, scheduleNextEvent, effectiveFoodCost, skillMod
 import type { GameState, SimEvent, StageCode } from '../game/types';
 import { clearSave, loadSave, writeSave } from './persist';
 
-export interface ReturnReport {
-  activeSecondsAway: number;
-  crumbsDelta: number;
-  satietyDelta: number;
-  moodDelta: number;
-  events: SimEvent[];
-}
-
-interface ReportBaseline {
-  activeSeconds: number;
-  crumbsTotal: number;
-  satiety: number;
-  mood: number;
-  events: SimEvent[];
-}
-
 export interface ReactionBubble {
   text: string | null; // null = « … » (génération en cours)
   source: 'ai' | 'scripted' | null;
@@ -61,7 +45,6 @@ interface TokidachiStore {
   locked: boolean;
   reaction: ReactionBubble | null;
   notice: string | null;
-  report: ReturnReport | null;
   language: 'fr' | 'en';
   notificationsEnabled: boolean;
   notifyThingsDone: boolean;
@@ -86,7 +69,7 @@ interface TokidachiStore {
   buyCosmetic(id: string): void;
   toggleCosmetic(id: string): void;
   buyChild(): void;
-  buyWeapon(id: string): void;
+  buyTurret(): void;
   upgradeContainer(): void;
   buryAndRestart(name: string): void;
   succeed(childIndex: number, name: string): void;
@@ -94,9 +77,6 @@ interface TokidachiStore {
   prestigeEarly(): void;
   buyPrestigeSkill(skillId: string): void;
   setLocked(locked: boolean): void;
-  markAway(): void;
-  markBack(): void;
-  dismissReport(): void;
   dismissNotice(): void;
   dismissReaction(): void;
 
@@ -150,7 +130,7 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
     c.cosmetics ??= { owned: [], equipped: [] };
     c.children ??= [];
     c.containerLevel ??= 0;
-    c.weapons ??= [];
+    c.turretLevel ??= 0;
     c.activeEvent ??= null;
     // Ancien nom de stade (avant les 5 niveaux d'évolution).
     if ((c.stage as string) === 'child') c.stage = 'kid' as StageCode;
@@ -199,21 +179,8 @@ function eventNotice(cfg: GameConfig, events: SimEvent[]): string | null {
   return null;
 }
 
-let baseline: ReportBaseline | null = null;
 let reactionSeq = 0;
 let sinceSave = 0;
-
-function snapshotBaseline(game: GameState): ReportBaseline | null {
-  const c = game.companion;
-  if (!c || c.dead || c.stage === 'egg') return null;
-  return {
-    activeSeconds: c.activeSeconds,
-    crumbsTotal: game.wallet.crumbs + c.pendingCrumbs,
-    satiety: c.satiety,
-    mood: c.mood,
-    events: [],
-  };
-}
 
 export const useTokidachi = create<TokidachiStore>((set, get) => ({
   loaded: false,
@@ -225,7 +192,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   locked: false,
   reaction: null,
   notice: null,
-  report: null,
   language: 'fr',
   notificationsEnabled: true,
   notifyThingsDone: true,
@@ -315,7 +281,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     next.wallet.memorial = next.memorial;
     next.wallet.prestigeSkills = next.prestigeSkills;
     const events = advanceSim(next.companion!, next.wallet, dtSeconds, cfg);
-    baseline?.events.push(...events);
     const notice = eventNotice(cfg, events);
     set(notice ? { game: next, notice } : { game: next });
 
@@ -361,12 +326,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
               case 'event-defended':
                 const defEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Une menace';
                 title = '🛡️ Menace repoussée !';
-                body = `${defEventLabel} a été repoussé avec succès.`;
+                body = event.data?.turret
+                  ? "La tourelle anti-OVNI a intercepté l'OVNI avant qu'il n'agisse !"
+                  : `${defEventLabel} a été repoussé avec succès.`;
                 break;
               case 'event-boon':
-                const boonEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Un ami';
+                const boonEvent = eventById(cfg, String(event.data?.eventId));
                 title = '🦋 Visite amicale !';
-                body = `${boonEventLabel} est de passage.`;
+                body = boonEvent?.id === 'crumb-rain'
+                  ? `Pluie de miettes : +${event.data?.gain ?? '?'} !`
+                  : `${boonEvent?.label ?? 'Un ami'} est de passage.`;
                 break;
               case 'got-hungry':
                 title = '🍽️ J\'ai faim !';
@@ -385,14 +354,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
                 body = 'Le contenant de miettes est plein, pense à le vider.';
                 break;
               case 'event-started':
-                const threatLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Menace';
+                const threatEvent = eventById(cfg, String(event.data?.eventId));
                 title = '⚠️ Alerte menace !';
-                body = `Un ${threatLabel} est arrivé ! Chasse-le vite !`;
+                body = threatEvent?.threatText || `Un ${threatEvent?.label ?? 'intrus'} est arrivé ! Chasse-le vite !`;
                 break;
               case 'event-lost':
                 const lostLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Pillard';
                 title = '😿 Dégâts subis';
-                body = `Le ${lostLabel} a causé des dégâts avant de partir.`;
+                body = event.data?.eventId === 'ufo-abduction'
+                  ? 'Un OVNI a enlevé un petit… La famille est sous le choc.'
+                  : `Le ${lostLabel} a causé des dégâts avant de partir.`;
                 break;
             }
           } else {
@@ -427,12 +398,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
               case 'event-defended':
                 const defEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'A threat';
                 title = '🛡️ Threat repelled!';
-                body = `${defEventLabel} was successfully repelled.`;
+                body = event.data?.turret
+                  ? 'The anti-UFO turret intercepted the UFO before it could act!'
+                  : `${defEventLabel} was successfully repelled.`;
                 break;
               case 'event-boon':
-                const boonEventLabel = eventById(cfg, String(event.data?.eventId))?.label || 'A friend';
+                const boonEvent = eventById(cfg, String(event.data?.eventId));
                 title = '🦋 Friendly visitor!';
-                body = `${boonEventLabel} paid a visit.`;
+                body = boonEvent?.id === 'crumb-rain'
+                  ? `Crumb rain: +${event.data?.gain ?? '?'}!`
+                  : `${boonEvent?.label ?? 'A friend'} paid a visit.`;
                 break;
               case 'got-hungry':
                 title = '🍽️ Hungry!';
@@ -458,7 +433,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
               case 'event-lost':
                 const lostLabel = eventById(cfg, String(event.data?.eventId))?.label || 'Raider';
                 title = '😿 Damage taken';
-                body = `The ${lostLabel} caused damage before leaving.`;
+                body = event.data?.eventId === 'ufo-abduction'
+                  ? 'A UFO abducted a little one… the family is in shock.'
+                  : `The ${lostLabel} caused damage before leaving.`;
                 break;
             }
           }
@@ -470,7 +447,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     }
 
     if (events.some((e) => e.type === 'died')) {
-      baseline = null;
       void writeSave(makeSave(get()));
       return;
     }
@@ -637,7 +613,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     if (!game.companion?.activeEvent) return;
     const next = structuredClone(game);
     const events = defendEvent(next.companion!, cfg);
-    baseline?.events.push(...events);
     const notice = eventNotice(cfg, events);
     set(notice ? { game: next, notice } : { game: next });
     void writeSave(makeSave(get()));
@@ -682,17 +657,16 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     void writeSave(makeSave(get()));
   },
 
-  buyWeapon(id) {
+  buyTurret() {
     const { game, cfg } = get();
     if (!game.companion) return;
     const next = structuredClone(game);
-    const res = buyWeaponAction(next.companion!, next.wallet, next.capacity, id, cfg);
+    const res = buyTurretAction(next.companion!, next.wallet, next.capacity, cfg);
     if (!res.ok) {
       set({ notice: res.reason });
       return;
     }
-    const label = cfg.weapons.find((w) => w.id === id)?.label ?? id;
-    set({ game: next, notice: `🛡️ ${label} installé — les OVNIs vont déguster !` });
+    set({ game: next, notice: 'Tourelle anti-OVNI améliorée !' });
     void writeSave(makeSave(get()));
   },
 
@@ -755,7 +729,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     set({
       game: next,
       reaction: null,
-      report: null,
       notice: `🪦 Nouveau cycle commencé ! +${prestigeGained} Points de Prestige.`
     });
     void writeSave(makeSave(get()));
@@ -764,42 +737,11 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   setLocked(locked) {
     const wasLocked = get().locked;
     if (locked && !wasLocked) {
-      get().markAway();
       void writeSave(makeSave(get()));
     }
     set({ locked });
-    if (!locked && wasLocked) get().markBack();
   },
 
-  // Rapport de retour (GDD §7) : baseline posée quand le joueur s'absente
-  // (blur/verrouillage), comparaison quand il revient.
-  markAway() {
-    if (!baseline) baseline = snapshotBaseline(get().game);
-  },
-
-  markBack() {
-    const b = baseline;
-    baseline = null;
-    const { game } = get();
-    const c = game.companion;
-    if (!b || !c || c.stage === 'egg') return;
-    const awaySeconds = c.activeSeconds - b.activeSeconds;
-    const grave = b.events.some((e) =>
-      ['died', 'evolved', 'skill-learned', 'got-sick', 'crumb-cap-reached'].includes(e.type),
-    );
-    if (awaySeconds < 120 && !grave) return; // rien d'intéressant à raconter
-    set({
-      report: {
-        activeSecondsAway: awaySeconds,
-        crumbsDelta: game.wallet.crumbs + c.pendingCrumbs - b.crumbsTotal,
-        satietyDelta: c.satiety - b.satiety,
-        moodDelta: c.mood - b.mood,
-        events: b.events,
-      },
-    });
-  },
-
-  dismissReport: () => set({ report: null }),
   dismissNotice: () => set({ notice: null }),
   dismissReaction: () => set({ reaction: null }),
 
@@ -1010,10 +952,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         const saveData = data.saveData;
         const devMode = saveData.devMode ?? false;
         const cfg = devMode ? get().cfg : { ...get().cfg, simSpeed: 1 };
-        
-        // Reset baseline
-        baseline = null;
-        
+
         set({
           game: migrateGame(saveData.game, get().cfg),
           providerId: saveData.providerId,
@@ -1025,7 +964,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
           cloudServerUrl: saveData.cloudServerUrl ?? cloudServerUrl,
           language: saveData.language ?? 'fr',
           reaction: null,
-          report: null,
           notice: "Sauvegarde restaurée !",
         });
         
@@ -1101,7 +1039,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     set({
       game: next,
       reaction: null,
-      report: null,
       notice: `✨ Successeur désigné avec succès ! +${prestigeGained} Points de Prestige.`,
     });
     void writeSave(makeSave(get()));
@@ -1162,7 +1099,6 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     set({
       game: next,
       reaction: null,
-      report: null,
       notice: `✨ Prestige précoce effectué ! +${prestigeGained} Points de Prestige.`
     });
     void writeSave(makeSave(get()));
@@ -1195,9 +1131,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   },
 
   async resetSave() {
-    baseline = null;
     await clearSave();
-    set({ game: freshGame(get().cfg), reaction: null, report: null, notice: null });
+    set({ game: freshGame(get().cfg), reaction: null, notice: null });
   },
 }));
 

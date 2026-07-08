@@ -301,7 +301,7 @@ function stepSim(
   }
 
   // — Événements aléatoires : menaces à chasser d'un clic, aubaines gratuites.
-  stepEvents(c, wallet, cfg, events, mods);
+  stepEvents(c, cfg, events, mods);
 
   // — XP passive (boostée par la branche Sociale) + évolution par seuil.
   c.xp += (cfg.xpPerActiveHour / HOUR) * s * mods.xp;
@@ -321,12 +321,8 @@ function rng(cfg: GameConfig): number {
   return (cfg.rng ?? Math.random)();
 }
 
-/** Chance cumulée de l'arsenal anti-OVNI (Armurerie). */
-export function ufoDefenseChance(c: CompanionState, cfg: GameConfig): number {
-  return c.weapons.reduce(
-    (sum, id) => sum + (cfg.weapons.find((w) => w.id === id)?.ufoDefense ?? 0),
-    0,
-  );
+export function ufoInterceptChance(c: CompanionState, cfg: GameConfig): number {
+  return Math.min(0.95, (c.turretLevel ?? 0) * cfg.turret.chancePerLevel);
 }
 
 export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
@@ -342,7 +338,6 @@ export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
 
 function stepEvents(
   c: CompanionState,
-  wallet: WalletState,
   cfg: GameConfig,
   events: SimEvent[],
   mods: SkillModifiers,
@@ -355,7 +350,7 @@ function stepEvents(
       return;
     }
     if (c.activeSeconds >= c.activeEvent.expiresAtActive) {
-      applyThreatLoss(c, wallet, cfg, c.activeEvent.eventId, events, mods);
+      applyThreatLoss(c, cfg, c.activeEvent.eventId, events, mods);
       c.activeEvent = null;
       scheduleNextEvent(c, cfg);
     }
@@ -388,13 +383,10 @@ function stepEvents(
   }
 
   // Menace : la Défense peut la repousser toute seule — et contre l'OVNI,
-  // l'arsenal de l'Armurerie s'ajoute (fronde, canon à baguettes, laser…).
-  const autoChance =
-    def.id === 'ufo-abduction'
-      ? Math.min(0.95, mods.autoDefend + ufoDefenseChance(c, cfg))
-      : mods.autoDefend;
-  if (rng(cfg) < autoChance) {
-    events.push({ type: 'event-defended', data: { eventId: def.id, auto: true } });
+  // la tourelle anti-OVNI s'ajoute.
+  const turretBonus = def.id === 'ufo-abduction' ? ufoInterceptChance(c, cfg) : 0;
+  if (rng(cfg) < Math.min(0.98, mods.autoDefend + turretBonus)) {
+    events.push({ type: 'event-defended', data: { eventId: def.id, auto: true, turret: turretBonus > 0 } });
     scheduleNextEvent(c, cfg);
     return;
   }
@@ -428,7 +420,6 @@ function applyBoon(
 /** La menace n'a pas été chassée à temps : les pillards se servent. */
 function applyThreatLoss(
   c: CompanionState,
-  wallet: WalletState,
   cfg: GameConfig,
   eventId: string,
   events: SimEvent[],
@@ -439,8 +430,8 @@ function applyThreatLoss(
     lost = Math.floor(c.pendingCrumbs * cfg.thiefStealRatio * mods.theftLoss);
     c.pendingCrumbs = Math.max(0, c.pendingCrumbs - lost);
   } else if (eventId === 'ant-invasion') {
-    lost = Math.floor(wallet.crumbs * cfg.antStealRatio * mods.theftLoss);
-    wallet.crumbs -= lost;
+    lost = Math.floor(c.pendingCrumbs * cfg.antStealRatio * mods.theftLoss);
+    c.pendingCrumbs -= lost;
   } else if (eventId === 'greedy-pigeon') {
     lost = Math.round(cfg.pigeonSatietyBite * mods.theftLoss);
     c.satiety = clamp(c.satiety - lost);

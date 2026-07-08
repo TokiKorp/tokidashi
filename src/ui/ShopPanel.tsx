@@ -2,8 +2,8 @@
 // adoption de petits compagnons. Les cosmétiques s'affichent en pixels sur
 // le sprite ; les petits aident à la production de Miettes.
 
-import { childCost } from '../game/config';
-import { containerOf, ufoDefenseChance } from '../game/sim';
+import { childCost, turretCost } from '../game/config';
+import { containerOf, ufoInterceptChance } from '../game/sim';
 import { useTokidachi } from '../state/store';
 import { formatCrumbs, formatTokens } from './format';
 import { ICON_TOKEN, ICON_CRUMB, ICON_SHIELD, ICON_HOUSE, ICON_UPGRADE, ICON_PEA, ICON_ALERT } from './icons';
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function ShopPanel({ onClose }: Props) {
-  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild, buyWeapon, upgradeContainer } = useTokidachi();
+  const { cfg, game, buyCosmetic, toggleCosmetic, buyChild, buyTurret, upgradeContainer } = useTokidachi();
   const c = game.companion;
   if (!c) return null;
 
@@ -163,38 +163,25 @@ export function ShopPanel({ onClose }: Props) {
 
         <section>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <PixelIcon grid={ICON_ALERT} alt="" /> Armurerie anti-OVNI
+            <PixelIcon grid={ICON_SHIELD} alt="" /> Tourelle anti-OVNI
           </h3>
           <p className="panel-hint">
-            Chaque arme installée ajoute sa chance de repousser une abduction toute
-            seule. Arsenal actuel : {Math.round(ufoDefenseChance(c, cfg) * 100)} % de
-            défense.
+            Niveau {c.turretLevel ?? 0}/{cfg.turret.maxLevel} — {Math.round(ufoInterceptChance(c, cfg) * 100)}%
+            de chances d'intercepter l'OVNI avant qu'il n'enlève un petit.
+            N'agit que si des petits ont été adoptés.
           </p>
-          <ul className="shop-list">
-            {cfg.weapons.map((w) => {
-              const owned = c.weapons.includes(w.id);
-              return (
-                <li key={w.id} className="shop-item" title={w.description}>
-                  <span className="shop-emoji">{w.emoji}</span>
-                  <span className="shop-name">
-                    {w.label}
-                    <small className="shop-slot"> · +{Math.round(w.ufoDefense * 100)} %</small>
-                  </span>
-                  {owned ? (
-                    <span style={{ fontSize: '0.85em', color: 'var(--mint-dark)', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                      Installée ✓
-                    </span>
-                  ) : (
-                    <button className="btn-secondary btn-mini" onClick={() => buyWeapon(w.id)}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <PixelIcon grid={ICON_CRUMB} alt="" size={10} /> {w.cost}
-                      </span>
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          {(c.turretLevel ?? 0) >= cfg.turret.maxLevel ? (
+            <p className="panel-hint" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <PixelIcon grid={ICON_SHIELD} alt="" /> Tourelle au niveau maximum !
+            </p>
+          ) : (
+            <button className="btn-primary" onClick={buyTurret}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <PixelIcon grid={ICON_UPGRADE} alt="" /> Améliorer —{' '}
+                <PixelIcon grid={ICON_TOKEN} alt="" /> {turretCost(cfg, c.turretLevel ?? 0)}
+              </span>
+            </button>
+          )}
         </section>
 
         <button className="btn-secondary" onClick={onClose}>Fermer</button>

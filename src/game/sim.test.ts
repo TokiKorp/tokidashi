@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buyChild,
   buyCosmetic,
-  buyWeapon,
+  buyTurret,
   collectCrumbs,
   createCompanion,
   equipCosmetic,
@@ -25,7 +25,6 @@ import {
   defendEvent,
   levelScale,
   scheduleNextEvent,
-  ufoDefenseChance,
   upgradeCost,
   visibleState,
 } from './sim';
@@ -505,28 +504,36 @@ describe('événements aléatoires : pillards et aubaines', () => {
     expect(c.activeEvent?.eventId).not.toBe('ufo-abduction');
   });
 
-  it("l'arsenal anti-OVNI repousse la soucoupe tout seul", () => {
+  it("les fourmis ne pillent que le pot, jamais le portefeuille", () => {
+    const c = child();
+    c.satiety = 100;
+    c.pendingCrumbs = 100;
+    const w = wallet(500);
+    c.activeEvent = {
+      eventId: 'ant-invasion',
+      startedAtActive: c.activeSeconds,
+      expiresAtActive: c.activeSeconds + 10,
+    };
+    const quiet: GameConfig = { ...cfg, rng: () => 0.5 };
+    const events = advanceSim(c, w, 120, quiet);
+    expect(events.some((e) => e.type === 'event-lost')).toBe(true);
+    expect(c.pendingCrumbs).toBeLessThan(100);
+    expect(w.crumbs).toBe(500);
+  });
+
+  it("une tourelle bien améliorée intercepte l'OVNI avant qu'il n'agisse", () => {
     const c = child();
     c.stage = 'teen';
     c.satiety = 100;
+    c.pendingCrumbs = 0;
+    c.turretLevel = 5;
     c.children = [{ seed: 1, hue: 10, shape: 0, earStyle: 0, spots: false }];
     c.nextEventAtActive = 0;
-    // Armes achetées : 25 % + 30 % = 55 % de défense.
-    const w = wallet(cfg.weapons[0].cost + cfg.weapons[1].cost);
-    expect(buyWeapon(c, w, capacity(), 'fronde', cfg).ok).toBe(true);
-    expect(buyWeapon(c, w, capacity(), 'canon-baguettes', cfg).ok).toBe(true);
-    expect(buyWeapon(c, w, capacity(), 'fronde', cfg).ok).toBe(false); // déjà installée
-    expect(ufoDefenseChance(c, cfg)).toBeCloseTo(0.55, 5);
-
-    // Pool réduit à l'OVNI, rng 0,5 : tirage → OVNI, défense 0,5 < 0,55 → repoussé.
-    const ufoOnly: GameConfig = {
-      ...cfg,
-      events: cfg.events.filter((e) => e.id === 'ufo-abduction'),
-      rng: () => 0.5,
-    };
-    const events = advanceSim(c, w, 30, ufoOnly);
-    expect(events.some((e) => e.type === 'event-defended' && e.data?.auto)).toBe(true);
-    expect(c.children.length).toBe(1); // personne n'a été enlevé
+    const forced: GameConfig = { ...cfg, rng: () => 0.7 };
+    const events = advanceSim(c, wallet(), 30, forced);
+    expect(events.some((e) => e.type === 'event-defended' && e.data?.turret === true)).toBe(true);
+    expect(c.children.length).toBe(1);
+    expect(c.activeEvent).toBeNull();
   });
 
   it("les petits creusent l'appétit du foyer", () => {
@@ -660,6 +667,18 @@ describe('boutique : cosmétiques et adoption', () => {
 
     // Ils aident à la production.
     expect(crumbRatePerHour(c, cfg)).toBeGreaterThan(0);
+  });
+
+  it('améliore la tourelle anti-OVNI par niveaux, jusqu\'au plafond', () => {
+    const c = child();
+    const cap = capacity();
+    expect(buyTurret(c, wallet(), cap, cfg).ok).toBe(true);
+    expect(c.turretLevel).toBe(1);
+    for (let i = 1; i < cfg.turret.maxLevel; i++) {
+      expect(buyTurret(c, wallet(), cap, cfg).ok).toBe(true);
+    }
+    expect(c.turretLevel).toBe(cfg.turret.maxLevel);
+    expect(buyTurret(c, wallet(), cap, cfg).ok).toBe(false); // déjà au maximum
   });
 });
 

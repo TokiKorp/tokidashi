@@ -1,8 +1,6 @@
-// Détection de présence (GDD §6.1) :
-// - verrouillage/déverrouillage de session → événement émis par la coque Rust
-//   (poll CGSession côté macOS) → gel/dégel de la simulation ;
-// - focus/blur de la fenêtre → baseline du rapport de retour (GDD §7) : la
-//   production continue en arrière-plan, on raconte au retour.
+// Détection de présence (GDD §6.1) : verrouillage/déverrouillage de session
+// → événement émis par la coque Rust (poll CGSession côté macOS) → gel/dégel
+// de la simulation.
 
 import { isTauri } from './persist';
 import { liveStore } from './store';
@@ -17,9 +15,6 @@ export async function initSessionListeners(): Promise<void> {
   g.__tokidachiSessionWired = true;
 
   const store = () => liveStore().getState();
-
-  window.addEventListener('blur', () => store().markAway());
-  window.addEventListener('focus', () => store().markBack());
 
   if (isTauri()) {
     const { listen } = await import('@tauri-apps/api/event');

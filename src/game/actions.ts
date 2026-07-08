@@ -3,7 +3,7 @@
 // refus de gameplay — l'UI affiche la raison).
 
 import type { GameConfig } from './config';
-import { childCost, cosmeticById, foodById, skillById } from './config';
+import { childCost, cosmeticById, foodById, skillById, turretCost } from './config';
 import { generateGenome } from './genome';
 import {
   applyFoodEffects,
@@ -50,7 +50,6 @@ export function createCompanion(
     cosmetics: { owned: [], equipped: [] },
     children: [],
     containerLevel: 0,
-    weapons: [],
     activeEvent: null,
     nextEventAtActive: 15 * 60 + rng() * 15 * 60, // premier événement entre 15 et 30 min
     lastPlayAtActive: -Infinity,
@@ -307,21 +306,18 @@ export function buyChild(
   return { ok: true, events: [] };
 }
 
-/** Acheter une arme anti-OVNI (Armurerie de la boutique). */
-export function buyWeapon(
+export function buyTurret(
   c: CompanionState,
   wallet: WalletState,
   capacity: CapacityGauge,
-  weaponId: string,
   cfg: GameConfig,
 ): ActionResult {
   if (c.dead) return { ok: false, reason: 'Il est trop tard…' };
-  const def = cfg.weapons.find((w) => w.id === weaponId);
-  if (!def) return { ok: false, reason: 'Arme inconnue.' };
-  if (c.weapons.includes(weaponId)) return { ok: false, reason: "Déjà dans l'arsenal." };
-  const refused = pay(wallet, capacity, def.currency, def.cost);
+  const level = c.turretLevel ?? 0;
+  if (level >= cfg.turret.maxLevel) return { ok: false, reason: 'Tourelle déjà au niveau maximum.' };
+  const refused = pay(wallet, capacity, 'token', turretCost(cfg, level));
   if (refused) return refused;
-  c.weapons.push(weaponId);
+  c.turretLevel = level + 1;
   return { ok: true, events: [] };
 }
 
