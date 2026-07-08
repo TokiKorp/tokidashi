@@ -28,8 +28,9 @@ export default function App() {
   const { loaded, game, cfg, locked, reaction, notice, report, language } = store;
   const t = TRANSLATIONS[language];
   const [panel, setPanel] = useState<OpenPanel>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [hudVisible, setHudVisible] = useState(
-    () => localStorage.getItem('tokidachi-hud') !== 'hidden',
+    () => localStorage.getItem('tokidachi-hud') === 'visible',
   );
 
   const toggleHud = () => {
@@ -96,6 +97,7 @@ export default function App() {
           onDefend={store.defend}
           onCollect={c.pendingCrumbs >= 1 ? store.collect : undefined}
           onTap={c.stage === 'egg' ? store.tapEgg : undefined}
+          skills={c.skills.filter(sp => sp.state === 'owned').map(sp => sp.skillId)}
         />
         {reaction && (
           <div className="bubble" key={reaction.seq}>
@@ -126,14 +128,96 @@ export default function App() {
       </main>
 
       {!hudVisible && (
-        <div className="minibar">
-          <span className="drag-grip" data-tauri-drag-region>⠿</span>
-          <span className="minibar-stats">
-            🍽️ {Math.round(c.satiety)} · 😊 {Math.round(c.mood)}
-          </span>
-          <button className="btn-toggle" title={t.show_hud} onClick={toggleHud}>
-            ▴
+        <div className="minimal-menu-container" style={{ position: 'absolute', bottom: '12px', right: '12px', zIndex: 100 }}>
+          <button
+            className="btn-primary"
+            style={{ width: '36px', height: '36px', borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4em', border: '3px solid var(--ink)', boxShadow: 'var(--shadow)', cursor: 'pointer', background: 'var(--gold)' }}
+            onClick={() => setMenuOpen(!menuOpen)}
+            title="Menu Tokidachi"
+          >
+            ☰
           </button>
+          
+          {menuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '44px',
+                right: 0,
+                background: 'var(--bg-panel)',
+                border: '3px solid var(--ink)',
+                borderRadius: '8px',
+                padding: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                boxShadow: 'var(--shadow)',
+                minWidth: '150px'
+              }}
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  toggleHud();
+                  setMenuOpen(false);
+                }}
+              >
+                📊 Afficher HUD
+              </button>
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  setPanel('feed');
+                  setMenuOpen(false);
+                }}
+              >
+                🍽️ Nourrir
+              </button>
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  store.play();
+                  setMenuOpen(false);
+                }}
+              >
+                🤹 Jouer
+              </button>
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  setPanel('skills');
+                  setMenuOpen(false);
+                }}
+              >
+                🧠 Compétences
+              </button>
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  setPanel('shop');
+                  setMenuOpen(false);
+                }}
+              >
+                🛒 Boutique
+              </button>
+              <button
+                className="btn-secondary btn-mini"
+                style={{ textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 10px', font: 'inherit' }}
+                onClick={() => {
+                  setPanel('dev');
+                  setMenuOpen(false);
+                }}
+              >
+                ⚙️ Paramètres
+              </button>
+            </div>
+          )}
         </div>
       )}
 

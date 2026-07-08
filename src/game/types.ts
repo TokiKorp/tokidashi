@@ -131,6 +131,8 @@ export interface CompanionState {
   skills: SkillProgress[];
   /** Miettes produites non ramassées, plafonnées (GDD §7 : stock idle plafonné). */
   pendingCrumbs: number;
+  grandpaEnteredAt?: number;
+  totalCrumbsGenerated?: number;
   /**
    * « Chauffe » de prix par aliment : monte à chaque achat (anti-spam),
    * redescend avec le temps actif (demi-vie ~5 min).
@@ -152,6 +154,9 @@ export interface CompanionState {
 
 export interface WalletState {
   crumbs: number;
+  pea?: number;
+  memorial?: MemorialEntry[];
+  prestigeSkills?: string[];
 }
 
 /** Jauge de capacité du provider, en TOKEN (GDD §5.3). Simulée en mode DEV. */
@@ -237,4 +242,6 @@ export interface GameState {
   capacity: CapacityGauge;
   memorial: MemorialEntry[];
   bornAtIso: string | null;
+  prestigePoints?: number;
+  prestigeSkills?: string[];
 }

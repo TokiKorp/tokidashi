@@ -31,6 +31,7 @@ interface Props {
   onDefend?: () => void;
   onCollect?: () => void;
   onTap?: () => void;
+  skills?: string[];
 }
 
 // Textures d'ennemis (2 frames), construites à la demande.
@@ -65,12 +66,93 @@ const CHILD_SPOTS: Array<[number, number]> = [
 
 // ——— Miettes au sol : la production se VOIT (et se ramasse au clic) ———
 
-const CRUMB_PALETTE = { '.': 'transparent', o: '#8a6d3b', s: '#f7c873', w: '#fde8bd' };
-const CRUMB_GRIDS = [
-  ['.oo.', 'oswo', 'osso', '.oo.'],
-  ['..o.', '.oso', 'osso', '.oo.'],
-  ['.o.', 'oso', '.o.'],
-];
+export interface CrumbVisualType {
+  name: string;
+  worth: number;
+  grids: string[][];
+  palette: Record<string, string>;
+}
+
+export const CRUMB_VISUAL_TYPES: Record<string, CrumbVisualType> = {
+  crumb: {
+    name: 'miette',
+    worth: 1,
+    grids: [
+      ['.oo.', 'oswo', 'osso', '.oo.'],
+      ['..o.', '.oso', 'osso', '.oo.'],
+      ['.o.', 'oso', '.o.'],
+    ],
+    palette: { '.': 'transparent', o: '#8a6d3b', s: '#f7c873', w: '#fde8bd' },
+  },
+  chouquette: {
+    name: 'chouquette',
+    worth: 5,
+    grids: [
+      [
+        '..ww..',
+        '.wosw.',
+        'wososw',
+        '.osso.',
+        '..oo..',
+      ]
+    ],
+    palette: { '.': 'transparent', o: '#8a6d3b', s: '#f7c873', w: '#ffffff' },
+  },
+  croissant: {
+    name: 'croissant',
+    worth: 25,
+    grids: [
+      [
+        '...oo...',
+        '..osoo..',
+        '.ososso.',
+        'osssssso',
+        '.ossoo..',
+      ]
+    ],
+    palette: { '.': 'transparent', o: '#b56d1e', s: '#f9ac33', w: '#fce3b8' },
+  },
+  pain: {
+    name: 'pain de campagne',
+    worth: 100,
+    grids: [
+      [
+        '...oooo...',
+        '..oosssoo..',
+        '.ooswoswoo.',
+        'ooswwoswwoo',
+        'ooswwoswwoo',
+        '.oossssoo.',
+        '...oooo...',
+      ]
+    ],
+    palette: { '.': 'transparent', o: '#5c3a21', s: '#8b5a2b', w: '#d2b48c' },
+  },
+  gateau: {
+    name: 'gâteau de mariage',
+    worth: 1000,
+    grids: [
+      [
+        '....ww....',
+        '...wppw...',
+        '..wwwwww..',
+        '.wppppppw.',
+        'wwwwwwwwww',
+        'wppppppppw',
+        'wwwwwwwwww',
+      ]
+    ],
+    palette: { '.': 'transparent', w: '#ffffff', p: '#ffb6c1', o: '#8a6d3b' },
+  },
+};
+
+export function getActiveCrumbVisualType(skills: string[]): CrumbVisualType {
+  if (skills.includes('crumb-singularity')) return CRUMB_VISUAL_TYPES.gateau;
+  if (skills.includes('grand-moulin')) return CRUMB_VISUAL_TYPES.pain;
+  if (skills.includes('croissanterie')) return CRUMB_VISUAL_TYPES.croissant;
+  if (skills.includes('bakery')) return CRUMB_VISUAL_TYPES.chouquette;
+  return CRUMB_VISUAL_TYPES.crumb;
+}
 
 // ——— Entassement : 1 sprite = 1 Miette disponible. Chaque miette atterrit à
 // un x ALÉATOIRE et se pose SUR celles déjà là (carte de hauteurs par colonne).
@@ -81,22 +163,25 @@ const BUCKET_W = 8;
 const BUCKETS = Math.floor(STAGE_W / BUCKET_W); // colonnes d'empilement
 const CRUMB_STACK_H = 5; // hauteur gagnée par miette empilée
 /** Garde-fou perf : au-delà, on n'ajoute plus de sprites (compteur au pot). */
-const MAX_CRUMB_SPRITES = 600;
+const MAX_CRUMB_SPRITES = 1500;
 
 /** Point d'où jaillissent les miettes : le Compagnon lui-même. */
 const CRUMB_SOURCE: [number, number] = [STAGE_W / 2, STAGE_H - 70];
 const FLIGHT_MS = 600;
 const FADE_MS = 400;
 
-let crumbTextures: Texture[] | null = null;
+const crumbTexturesCache = new Map<string, Texture[]>();
 
-function getCrumbTextures(): Texture[] {
-  crumbTextures ??= CRUMB_GRIDS.map((g) => {
-    const tex = Texture.from(gridToCanvas(g, CRUMB_PALETTE));
-    tex.source.scaleMode = 'nearest';
-    return tex;
-  });
-  return crumbTextures;
+function getCrumbTexturesForType(type: CrumbVisualType): Texture[] {
+  if (!crumbTexturesCache.has(type.name)) {
+    const texs = type.grids.map((g) => {
+      const tex = Texture.from(gridToCanvas(g, type.palette));
+      tex.source.scaleMode = 'nearest';
+      return tex;
+    });
+    crumbTexturesCache.set(type.name, texs);
+  }
+  return crumbTexturesCache.get(type.name)!;
 }
 
 function visibleCrumbCount(pending: number): number {
@@ -138,6 +223,7 @@ export function PetStage({
   onDefend,
   onCollect,
   onTap,
+  skills = [],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -192,7 +278,7 @@ export function PetStage({
       a.stage.addChild(crumbLayer);
       crumbLayerRef.current = crumbLayer;
       // Restauration : les miettes déjà produites sont posées sans vol.
-      syncCrumbs(crumbCountRef.current, false);
+      syncCrumbs(crumbCountRef.current, false, activeVisualRef.current);
 
       // Les petits adoptés, entre les miettes et le Compagnon.
       const childLayer = new Container();
@@ -414,7 +500,7 @@ export function PetStage({
   // les nouvelles VOLENT depuis le Compagnon vers une colonne aléatoire et se
   // posent SUR la pile ; les ramassées s'envolent en fondu (dernière arrivée,
   // première partie — les hauteurs restent cohérentes).
-  function syncCrumbs(count: number, animate: boolean): void {
+  function syncCrumbs(count: number, animate: boolean, visualType: CrumbVisualType): void {
     const layer = crumbLayerRef.current;
     if (!layer) return;
     const crumbs = crumbsRef.current;
@@ -431,7 +517,7 @@ export function PetStage({
       }
     }
 
-    const textures = getCrumbTextures();
+    const textures = getCrumbTexturesForType(visualType);
     let spawnIndex = 0;
     while (crumbs.length < count) {
       const i = crumbs.length;
@@ -441,7 +527,7 @@ export function PetStage({
 
       const bucket = Math.floor(Math.random() * BUCKETS);
       const x = bucket * BUCKET_W + BUCKET_W / 2 + (Math.random() * 4 - 2);
-      const y = Math.max(12, GROUND_Y - heights[bucket] * CRUMB_STACK_H);
+      const y = Math.max(6, GROUND_Y - heights[bucket] * CRUMB_STACK_H);
       heights[bucket] += 1;
       const target: [number, number] = [x, y];
 
@@ -464,12 +550,25 @@ export function PetStage({
   }
 
   // Le nombre de miettes affiché == le nombre de Miettes disponibles au pot.
-  const crumbCount = visibleCrumbCount(pendingCrumbs);
+  const activeVisual = getActiveCrumbVisualType(skills);
+  const prevVisualName = useRef(activeVisual.name);
+
+  if (prevVisualName.current !== activeVisual.name) {
+    prevVisualName.current = activeVisual.name;
+    crumbsRef.current.forEach((c) => c.sprite.destroy());
+    crumbsRef.current = [];
+    heightsRef.current.fill(0);
+  }
+
+  const activeVisualRef = useRef(activeVisual);
+  activeVisualRef.current = activeVisual;
+
+  const crumbCount = visibleCrumbCount(pendingCrumbs / activeVisual.worth);
   crumbCountRef.current = crumbCount;
   useEffect(() => {
-    syncCrumbs(crumbCount, true);
+    syncCrumbs(crumbCount, true, activeVisual);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crumbCount]);
+  }, [crumbCount, activeVisual.name]);
 
   return (
     <div

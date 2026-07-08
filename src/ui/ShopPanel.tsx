@@ -85,6 +85,44 @@ export function ShopPanel({ onClose }: Props) {
           )}
         </section>
 
+        {c.containerLevel >= 3 && (
+          <section className="pea-section" style={{ marginTop: '12px', padding: '10px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.05)' }}>
+            <h3>💼 PEA (Plan d'Épargne en Actions)</h3>
+            <p className="panel-hint">
+              Solde : <strong>{formatCrumbs(game.wallet.pea || 0)} Miettes</strong>
+              <br />
+              Rendement : +5% par heure active (<strong>+{formatCrumbs(Math.round((game.wallet.pea || 0) * 0.05))}/h</strong>)
+              <br />
+              <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>⚠️ Non récupérable !</span> Les miettes placées dessus y restent définitivement.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input
+                type="number"
+                min="1"
+                max={game.wallet.crumbs}
+                placeholder="Ex: 1000"
+                id="pea-deposit-amount"
+                style={{ flex: 1, padding: '4px 8px', border: '1px solid #ccc', borderRadius: '4px', font: 'inherit' }}
+              />
+              <button
+                className="btn-primary btn-mini"
+                onClick={() => {
+                  const input = document.getElementById('pea-deposit-amount') as HTMLInputElement;
+                  const amt = parseInt(input?.value || '0', 10);
+                  if (amt > 0 && amt <= game.wallet.crumbs) {
+                    useTokidachi.getState().depositToPea(amt);
+                    if (input) input.value = '';
+                  } else {
+                    alert("Montant invalide ou solde insuffisant !");
+                  }
+                }}
+              >
+                Déposer
+              </button>
+            </div>
+          </section>
+        )}
+
         <section>
           <h3>Adoption</h3>
           <p className="panel-hint">

@@ -6,7 +6,7 @@
 // Chaque palier laisse une fenêtre d'action et émet un événement lisible.
 
 import type { GameConfig } from './config';
-import { foodById, nextStage, skillById } from './config';
+import { foodById, nextStage, skillById, eventById } from './config';
 import type {
   CompanionState,
   FoodDef,
@@ -166,10 +166,30 @@ function stepSim(
   c.mood = clamp(c.mood - (moodLoss / HOUR) * s);
 
   // 3. Vitalité — ne baisse que Satiété à zéro ; régénère si bien nourri.
-  if (c.satiety <= 0) {
-    c.vitality = clamp(c.vitality - (cfg.vitalityLossPerHour / HOUR) * s);
-  } else if (c.satiety >= cfg.vitalityRegenSatietyThreshold) {
-    c.vitality = clamp(c.vitality + (cfg.vitalityRegenPerHour / HOUR) * s);
+  if (c.stage === 'grandpa') {
+    const isImmortal = ownsSkillId(c, 'immortal');
+    if (isImmortal) {
+      c.vitality = 100;
+    } else {
+      if (c.grandpaEnteredAt === undefined) {
+        c.grandpaEnteredAt = c.activeSeconds;
+      }
+      const grandpaAge = c.activeSeconds - c.grandpaEnteredAt;
+      const ageInHours = grandpaAge / 3600;
+      const decayRate = 10 + ageInHours * 1.5; // Dégrade de plus en plus vite
+      
+      const nurseLevel = c.skills.find((sp) => sp.skillId === 'nurse' && sp.state === 'owned')?.level ?? 0;
+      const nurseHeal = nurseLevel * 8; // Soin passif
+      
+      const netRate = nurseHeal - decayRate;
+      c.vitality = clamp(c.vitality + (netRate / HOUR) * s);
+    }
+  } else {
+    if (c.satiety <= 0) {
+      c.vitality = clamp(c.vitality - (cfg.vitalityLossPerHour / HOUR) * s);
+    } else if (c.satiety >= cfg.vitalityRegenSatietyThreshold) {
+      c.vitality = clamp(c.vitality + (cfg.vitalityRegenPerHour / HOUR) * s);
+    }
   }
 
   // 4. Maladie — état visible et réversible avant la mort.
@@ -206,7 +226,11 @@ function stepSim(
     if (sp.state !== 'learning' && !sp.upgrading) continue;
     const def = skillById(cfg, sp.skillId);
     if (!def) continue;
-    sp.trainedSeconds += s;
+    
+    // Sagesse des ancêtres (prestige) : vitesse +25%
+    const fastStudy = wallet.prestigeSkills?.includes('fast-study') ? 1.25 : 1.0;
+    sp.trainedSeconds += s * fastStudy;
+    
     if (sp.trainedSeconds >= def.trainSeconds) {
       sp.trainedSeconds = 0;
       if (sp.state === 'learning') {
@@ -229,9 +253,29 @@ function stepSim(
   if (rate > 0) {
     const before = c.pendingCrumbs;
     c.pendingCrumbs = Math.min(cap, c.pendingCrumbs + (rate / HOUR) * s);
+    c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + (c.pendingCrumbs - before);
     if (before < cap && c.pendingCrumbs >= cap) {
       events.push({ type: 'crumb-cap-reached' });
     }
+  }
+
+  // PEA passive interest (5% yield per active hour)
+  if (wallet.pea && wallet.pea > 0) {
+    const yieldRate = 0.05; // 5% per hour
+    const earned = (wallet.pea * yieldRate / HOUR) * s;
+    wallet.crumbs += earned;
+    c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + earned;
+  }
+
+  // Graveyard passive crumb generation
+  if (wallet.prestigeSkills?.includes('graveyard') && wallet.memorial && wallet.memorial.length > 0) {
+    const graveyardRate = wallet.memorial.reduce(
+      (sum, m) => sum + Math.max(5, Math.floor(m.activeSeconds / 3600) * 0.5),
+      0
+    );
+    const earned = (graveyardRate / HOUR) * s;
+    wallet.crumbs += earned;
+    c.totalCrumbsGenerated = (c.totalCrumbsGenerated || 0) + earned;
   }
 
   // — Les petits grignotent les Miettes : le pot d'abord, puis le portefeuille.
@@ -282,8 +326,10 @@ export function scheduleNextEvent(c: CompanionState, cfg: GameConfig): void {
   const base = cfg.eventMinIntervalSeconds + rng(cfg) * span;
   // L'appât du butin : un pot qui déborde attire les pillards bien plus vite.
   const lure = 1 + c.pendingCrumbs / cfg.crumbLureDivisor;
+  // Facteur d'âge : plus il est vieux, plus l'intervalle est court (les ennemis attaquent plus souvent)
+  const ageFactor = 1 + c.activeSeconds / 80000;
   c.nextEventAtActive =
-    c.activeSeconds + Math.max(cfg.eventIntervalFloorSeconds, base / lure);
+    c.activeSeconds + Math.max(cfg.eventIntervalFloorSeconds, base / (lure * ageFactor));
 }
 
 function stepEvents(
@@ -294,6 +340,12 @@ function stepEvents(
   mods: SkillModifiers,
 ): void {
   if (c.activeEvent) {
+    const activeDef = eventById(cfg, c.activeEvent.eventId);
+    if (cfg.disableEnemies && activeDef?.kind === 'threat') {
+      c.activeEvent = null;
+      scheduleNextEvent(c, cfg);
+      return;
+    }
     if (c.activeSeconds >= c.activeEvent.expiresAtActive) {
       applyThreatLoss(c, wallet, cfg, c.activeEvent.eventId, events, mods);
       c.activeEvent = null;
@@ -301,11 +353,20 @@ function stepEvents(
     }
     return;
   }
+  
+  if (cfg.disableEnemies) return;
   if (c.activeSeconds < c.nextEventAtActive) return;
 
   // Tirage pondéré. L'OVNI ne rôde que s'il y a des petits à enlever, et le
   // corbeau est d'autant plus attiré que le pot déborde.
-  const pool = cfg.events.filter((e) => !e.requiresChildren || c.children.length > 0);
+  const pool = cfg.events.filter((e) => {
+    if (cfg.disableEnemies && e.kind === 'threat') return false;
+    return !e.requiresChildren || c.children.length > 0;
+  });
+  if (pool.length === 0) {
+    scheduleNextEvent(c, cfg);
+    return;
+  }
   const weightOf = (e: (typeof pool)[number]): number =>
     e.id === 'crumb-thief' ? e.weight * (1 + c.pendingCrumbs / 200) : e.weight;
   const total = pool.reduce((sum, e) => sum + weightOf(e), 0);
@@ -477,7 +538,15 @@ export function applyFoodEffects(
     food.currency === 'token' ? food.satiety * mods.tokenSatiety : food.satiety;
   c.satiety = clamp(c.satiety + satiety);
   if (food.mood) c.mood = clamp(c.mood + food.mood);
-  if (food.vitality) c.vitality = clamp(c.vitality + food.vitality);
+  if (food.vitality) {
+    if (c.stage === 'grandpa') {
+      if (foodId === 'health-kit') {
+        c.vitality = clamp(c.vitality + food.vitality);
+      }
+    } else {
+      c.vitality = clamp(c.vitality + food.vitality);
+    }
+  }
 }
 
 /** L'état lisible à l'œil nu (GDD §4.2) — priorité du plus grave au plus doux. */

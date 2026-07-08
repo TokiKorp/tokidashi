@@ -91,6 +91,7 @@ export interface GameConfig {
   simSpeed: number;
   /** Source d'aléa injectable (tests). */
   rng?: () => number;
+  disableEnemies?: boolean;
 }
 
 // ————————————————————————————————————————————————————————————————
@@ -265,6 +266,8 @@ const AUTOMATION: SkillDef[] = chain(
     ['drone-livreur', 'Drone livreur', { crumbsPerHour: 150 }, 'Livre des Miettes fraîches par les airs. +150 Miettes/h.'],
     ['chef-auto', 'Chef étoilé automatique', { tokenSatietyMultiplier: 1.2 }],
     ['pilote-vie', 'Pilote automatique de vie', { metabolismMultiplier: 0.88 }],
+    ['nurse', 'Infirmières', { maxLevel: 5, minStage: 'grandpa' }, 'Soigne le Tokidachi papy (+8%/h par niveau) mais ne suffit plus avec l\'âge.'],
+    ['immortal', 'Toki éternel', { maxLevel: 1, cost: 10_000_000, minStage: 'grandpa' }, 'Rend le Tokidachi éternel. Il ne perd plus de vitalité avec la vieillesse.'],
   ],
   {
     category: 'automation',
@@ -388,6 +391,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     { id: 'full-meal', label: 'Repas complet', emoji: '🍱', currency: 'crumbs', cost: 40, satiety: 70, mood: 5 },
     { id: 'premium-feast', label: 'Festin premium', emoji: '🍰', currency: 'token', cost: 10_000, satiety: 100, mood: 20, vitality: 15 },
     { id: 'emergency-ration', label: "Ration d'urgence", emoji: '🥫', currency: 'token', cost: 100, satiety: 50 },
+    { id: 'health-kit', label: 'Kit de soin', emoji: '❤️', currency: 'token', cost: 1000, satiety: 0, vitality: 40, mood: 10 },
   ],
 
   skills: ALL_SKILLS,
@@ -505,3 +509,19 @@ export function eventById(cfg: GameConfig, id: string): EventDef | undefined {
 export function childCost(cfg: GameConfig, currentChildren: number): number {
   return cfg.childBaseCost * Math.pow(2, currentChildren);
 }
+
+export interface PrestigeSkillDef {
+  id: string;
+  label: string;
+  description: string;
+  cost: number;
+}
+
+export const PRESTIGE_SKILLS: PrestigeSkillDef[] = [
+  { id: 'starter-crumbs', label: 'Héritage matériel', description: 'Chaque nouveau Tokidachi commence sa vie avec +500 Miettes.', cost: 5 },
+  { id: 'meta-eco', label: 'Métabolisme spirituel', description: 'Réduit la faim de tous les futurs Tokidachis de 15%.', cost: 10 },
+  { id: 'fast-study', label: 'Sagesse des ancêtres', description: 'Les compétences s\'étudient 25% plus vite.', cost: 15 },
+  { id: 'tax-shield', label: 'Paradis Fiscal', description: 'Le PEA n\'est plus soumis à la taxe étatique de 80% lors de la succession.', cost: 15 },
+  { id: 'graveyard', label: 'Cimetière hanté', description: 'Permet au Tokidachi mort de générer passivement des Miettes dans le Mémorial (+0.5/h par heure de vie active atteinte).', cost: 20 },
+];
+

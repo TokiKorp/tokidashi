@@ -21,7 +21,7 @@ import {
   tapEgg as tapEggAction,
   upgradeContainer as upgradeContainerAction,
 } from '../game/actions';
-import { DEFAULT_CONFIG, eventById, foodById, skillById, type GameConfig } from '../game/config';
+import { DEFAULT_CONFIG, eventById, foodById, skillById, PRESTIGE_SKILLS, type GameConfig } from '../game/config';
 import { generateGenome } from '../game/genome';
 import { moodBucket, reactionTier } from '../game/reactions';
 import { advanceSim, defendEvent, scheduleNextEvent, effectiveFoodCost, skillModifiers, upgradeCost } from '../game/sim';
@@ -65,6 +65,7 @@ interface TokidachiStore {
   notificationsEnabled: boolean;
   notifyThingsDone: boolean;
   notifyNeedsAttention: boolean;
+  disableEnemies: boolean;
 
   // Cloud properties
   backupId: string;
@@ -86,6 +87,10 @@ interface TokidachiStore {
   buyChild(): void;
   upgradeContainer(): void;
   buryAndRestart(name: string): void;
+  succeed(childIndex: number, name: string): void;
+  depositToPea(amount: number): void;
+  prestigeEarly(): void;
+  buyPrestigeSkill(skillId: string): void;
   setLocked(locked: boolean): void;
   markAway(): void;
   markBack(): void;
@@ -97,6 +102,7 @@ interface TokidachiStore {
   setSelectedCli(cli: 'random' | 'agy' | 'codex' | 'claude'): void;
   unlockDevMode(key: string): void;
   disableDevMode(): void;
+  setDisableEnemies(disabled: boolean): void;
   setLanguage(lang: 'fr' | 'en'): void;
   setNotificationsEnabled(enabled: boolean): void;
   setNotifyThingsDone(enabled: boolean): void;
@@ -127,6 +133,8 @@ function freshGame(cfg: GameConfig): GameState {
     capacity: { budget: cfg.devCapacityBudget, used: 0, unlimited: true, tokenBag: 0 },
     memorial: [],
     bornAtIso: null,
+    prestigePoints: 0,
+    prestigeSkills: [],
   };
 }
 
@@ -155,6 +163,8 @@ function migrateGame(game: GameState, cfg: GameConfig): GameState {
   }
   game.capacity.unlimited ??= true;
   game.capacity.tokenBag ??= 0;
+  game.prestigePoints ??= 0;
+  game.prestigeSkills ??= [];
   return game;
 }
 
@@ -217,6 +227,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   notificationsEnabled: true,
   notifyThingsDone: true,
   notifyNeedsAttention: true,
+  disableEnemies: false,
 
   backupId: '',
   cloudSyncEnabled: false,
@@ -230,7 +241,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       
     if (save) {
       const devMode = save.devMode ?? false;
-      const cfg = devMode ? get().cfg : { ...get().cfg, simSpeed: 1 };
+      const disableEnemies = save.disableEnemies ?? false;
+      const cfg = devMode ? { ...get().cfg } : { ...get().cfg, simSpeed: 1 };
+      cfg.disableEnemies = disableEnemies;
       const backupId = save.backupId ?? defaultBackupId;
       set({
         game: migrateGame(save.game, get().cfg),
@@ -238,6 +251,7 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
         selectedCli: save.selectedCli ?? 'random',
         devMode,
         cfg,
+        disableEnemies,
         backupId,
         cloudSyncEnabled: save.cloudSyncEnabled ?? false,
         cloudServerUrl: save.cloudServerUrl ?? 'https://tokidachi-bb.bb-bbb.com',
@@ -261,9 +275,42 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
   tick(dtSeconds) {
     const { game, locked, cfg } = get();
     const c = game.companion;
-    if (locked || !c || c.dead) return;
+    if (locked) return;
+
+    if (!c || c.dead) {
+      const next = structuredClone(game);
+      const s = dtSeconds * cfg.simSpeed;
+      let crumbsEarned = 0;
+      const HOUR = 3600;
+      
+      if (next.wallet.pea && next.wallet.pea > 0) {
+        crumbsEarned += (next.wallet.pea * 0.05 / HOUR) * s;
+      }
+      
+      if (next.prestigeSkills?.includes('graveyard') && next.memorial && next.memorial.length > 0) {
+        const graveyardRate = next.memorial.reduce(
+          (sum, m) => sum + Math.max(5, Math.floor(m.activeSeconds / 3600) * 0.5),
+          0
+        );
+        crumbsEarned += (graveyardRate / HOUR) * s;
+      }
+      
+      if (crumbsEarned > 0) {
+        next.wallet.crumbs += crumbsEarned;
+        set({ game: next });
+        
+        sinceSave += dtSeconds;
+        if (sinceSave >= 30) {
+          sinceSave = 0;
+          void writeSave(makeSave(get()));
+        }
+      }
+      return;
+    }
 
     const next = structuredClone(game);
+    next.wallet.memorial = next.memorial;
+    next.wallet.prestigeSkills = next.prestigeSkills;
     const events = advanceSim(next.companion!, next.wallet, dtSeconds, cfg);
     baseline?.events.push(...events);
     const notice = eventNotice(cfg, events);
@@ -437,6 +484,9 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const next = structuredClone(game);
     next.companion = createCompanion(name);
     next.bornAtIso = new Date().toISOString();
+    if (next.prestigeSkills?.includes('starter-crumbs')) {
+      next.wallet.crumbs = (next.wallet.crumbs || 0) + 500;
+    }
     set({ game: next });
     void writeSave(makeSave(get()));
   },
@@ -648,9 +698,8 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     const dead = game.companion;
     if (!dead?.dead) return;
     const next = structuredClone(game);
-    // Mémorial (GDD §8.3) : deuil + fierté, sans mécanique. Zéro héritage pour
-    // l'instant (sous-décision §13.2 ouverte) — le portefeuille et la capacité
-    // restent, seuls le Compagnon et ses compétences sont perdus.
+    
+    // Memorial
     next.memorial.push({
       name: dead.name,
       stage: dead.stage,
@@ -658,9 +707,40 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
       bornAtIso: game.bornAtIso ?? new Date().toISOString(),
       diedAtIso: new Date().toISOString(),
     });
-    next.companion = createCompanion(name);
+
+    // Calculate prestige points: 0.5 per active hour + 1 per 2000 crumbs generated
+    const days = dead.activeSeconds / 86400;
+    const crumbsGen = dead.totalCrumbsGenerated || 0;
+    const prestigeGained = Math.floor(days * 10 + crumbsGen / 2000);
+    next.prestigePoints = (next.prestigePoints || 0) + prestigeGained;
+
+    // Apply estate tax of 80% on crumbs if no vault (container Level 3)
+    if (dead.containerLevel < 3) {
+      next.wallet.crumbs = Math.round(next.wallet.crumbs * 0.2);
+    }
+
+    // Apply estate tax of 80% on PEA unless Paradis Fiscal (tax-shield) is owned
+    const hasTaxShield = game.prestigeSkills?.includes('tax-shield');
+    if (next.wallet.pea && !hasTaxShield) {
+      next.wallet.pea = Math.round(next.wallet.pea * 0.2);
+    }
+
+    // New companion starting at egg
+    const newComp = createCompanion(name);
+    next.companion = newComp;
     next.bornAtIso = new Date().toISOString();
-    set({ game: next, reaction: null, report: null });
+
+    // Starter crumbs prestige bonus (+500 crumbs)
+    if (next.prestigeSkills?.includes('starter-crumbs')) {
+      next.wallet.crumbs = (next.wallet.crumbs || 0) + 500;
+    }
+
+    set({
+      game: next,
+      reaction: null,
+      report: null,
+      notice: `🪦 Nouveau cycle commencé ! +${prestigeGained} Points de Prestige.`
+    });
     void writeSave(makeSave(get()));
   },
 
@@ -942,6 +1022,161 @@ export const useTokidachi = create<TokidachiStore>((set, get) => ({
     }
   },
 
+  succeed(childIndex, newName) {
+    const { game } = get();
+    const dead = game.companion;
+    if (!dead?.dead) return;
+    const childGenome = dead.children[childIndex];
+    const next = structuredClone(game);
+    
+    // Memorial
+    next.memorial.push({
+      name: dead.name,
+      stage: dead.stage,
+      activeSeconds: dead.activeSeconds,
+      bornAtIso: game.bornAtIso ?? new Date().toISOString(),
+      diedAtIso: new Date().toISOString(),
+    });
+
+    // Calculate prestige points: 0.5 per active hour + 1 per 2000 crumbs generated
+    const days = dead.activeSeconds / 86400;
+    const crumbsGen = dead.totalCrumbsGenerated || 0;
+    const prestigeGained = Math.floor(days * 10 + crumbsGen / 2000);
+    next.prestigePoints = (next.prestigePoints || 0) + prestigeGained;
+
+    // Apply estate tax of 80% on crumbs if no vault (container Level 3)
+    if (dead.containerLevel < 3) {
+      next.wallet.crumbs = Math.round(next.wallet.crumbs * 0.2);
+    }
+
+    // Apply estate tax of 80% on PEA unless Paradis Fiscal (tax-shield) is owned
+    const hasTaxShield = game.prestigeSkills?.includes('tax-shield');
+    if (next.wallet.pea && !hasTaxShield) {
+      next.wallet.pea = Math.round(next.wallet.pea * 0.2);
+    }
+
+    // New companion directly in BLOB
+    const newComp = createCompanion(newName);
+    newComp.genome = childGenome;
+    newComp.stage = 'blob'; // Succession starts directly in BLOB!
+    newComp.satiety = 80;
+    newComp.vitality = 100;
+    newComp.mood = 70;
+    
+    // Inherit owned skills
+    newComp.skills = dead.skills.filter((sp) => sp.state === 'owned').map((sp) => ({
+      ...sp,
+      trainedSeconds: 0,
+      upgrading: false,
+    }));
+    
+    // Filter out the selected child
+    newComp.children = dead.children.filter((_, idx) => idx !== childIndex);
+
+    next.companion = newComp;
+    next.bornAtIso = new Date().toISOString();
+
+    // Starter crumbs prestige bonus (+500 crumbs)
+    if (next.prestigeSkills?.includes('starter-crumbs')) {
+      next.wallet.crumbs = (next.wallet.crumbs || 0) + 500;
+    }
+
+    set({
+      game: next,
+      reaction: null,
+      report: null,
+      notice: `✨ Successeur désigné avec succès ! +${prestigeGained} Points de Prestige.`,
+    });
+    void writeSave(makeSave(get()));
+  },
+
+  depositToPea(amount) {
+    const { game } = get();
+    if (game.wallet.crumbs < amount) return;
+    const next = structuredClone(game);
+    next.wallet.crumbs -= amount;
+    next.wallet.pea = (next.wallet.pea || 0) + amount;
+    set({ game: next, notice: `💼 Déposé 🍞 ${amount.toLocaleString()} dans le PEA !` });
+    void writeSave(makeSave(get()));
+  },
+
+  prestigeEarly() {
+    const { game } = get();
+    const c = game.companion;
+    if (!c) return;
+    const next = structuredClone(game);
+    
+    // Add memorial entry
+    next.memorial.push({
+      name: c.name,
+      stage: c.stage,
+      activeSeconds: c.activeSeconds,
+      bornAtIso: game.bornAtIso ?? new Date().toISOString(),
+      diedAtIso: new Date().toISOString(),
+    });
+
+    // Calculate prestige points: 0.5 per active hour + 1 per 2000 crumbs generated
+    const days = c.activeSeconds / 86400;
+    const crumbsGen = c.totalCrumbsGenerated || 0;
+    const prestigeGained = Math.floor(days * 10 + crumbsGen / 2000);
+    next.prestigePoints = (next.prestigePoints || 0) + prestigeGained;
+
+    // Apply estate tax of 80% on crumbs if no vault (container Level 3)
+    if (c.containerLevel < 3) {
+      next.wallet.crumbs = Math.round(next.wallet.crumbs * 0.2);
+    }
+
+    // Apply estate tax of 80% on PEA unless Paradis Fiscal (tax-shield) is owned
+    const hasTaxShield = game.prestigeSkills?.includes('tax-shield');
+    if (next.wallet.pea && !hasTaxShield) {
+      next.wallet.pea = Math.round(next.wallet.pea * 0.2);
+    }
+
+    // New companion starting at egg
+    const newComp = createCompanion(c.name);
+    next.companion = newComp;
+    next.bornAtIso = new Date().toISOString();
+
+    // Starter crumbs prestige bonus (+500 crumbs)
+    if (next.prestigeSkills?.includes('starter-crumbs')) {
+      next.wallet.crumbs = (next.wallet.crumbs || 0) + 500;
+    }
+
+    set({
+      game: next,
+      reaction: null,
+      report: null,
+      notice: `✨ Prestige précoce effectué ! +${prestigeGained} Points de Prestige.`
+    });
+    void writeSave(makeSave(get()));
+  },
+
+  buyPrestigeSkill(skillId) {
+    const { game } = get();
+    const skill = PRESTIGE_SKILLS.find(s => s.id === skillId);
+    if (!skill) return;
+    const currentPoints = game.prestigePoints || 0;
+    if (currentPoints < skill.cost) {
+      set({ notice: "Pas assez de Points de Prestige !" });
+      return;
+    }
+    const owned = game.prestigeSkills || [];
+    if (owned.includes(skillId)) return;
+    
+    const next = structuredClone(game);
+    next.prestigePoints = currentPoints - skill.cost;
+    next.prestigeSkills = [...owned, skillId];
+    
+    set({ game: next, notice: `✨ Acheté : ${skill.label} !` });
+    void writeSave(makeSave(get()));
+  },
+
+  setDisableEnemies(disabled) {
+    const nextCfg = { ...get().cfg, disableEnemies: disabled };
+    set({ disableEnemies: disabled, cfg: nextCfg });
+    void writeSave(makeSave(get()));
+  },
+
   async resetSave() {
     baseline = null;
     await clearSave();
@@ -984,6 +1219,7 @@ function makeSave(s: TokidachiStore) {
     providerId: s.providerId,
     selectedCli: s.selectedCli,
     devMode: s.devMode,
+    disableEnemies: s.disableEnemies,
     notificationsEnabled: s.notificationsEnabled,
     notifyThingsDone: s.notifyThingsDone,
     notifyNeedsAttention: s.notifyNeedsAttention,

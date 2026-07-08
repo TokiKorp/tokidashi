@@ -69,12 +69,23 @@ export function AdoptScreen() {
 }
 
 export function DeathScreen() {
-  const { game, buryAndRestart } = useTokidachi();
+  const { game, buryAndRestart, succeed } = useTokidachi();
+  const [selectedChildIndex, setSelectedChildIndex] = useState<number | null>(null);
+  const [successorName, setSuccessorName] = useState('');
   const c = game.companion;
+  
   if (!c) return null;
+
+  const handleSucceedSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedChildIndex !== null && successorName.trim()) {
+      succeed(selectedChildIndex, successorName);
+    }
+  };
+
   return (
     <div className="screen">
-      <div className="screen-card">
+      <div className="screen-card" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
         <DragBar title="Tokidachi" />
         <PetStage
           state="dead"
@@ -87,7 +98,69 @@ export function DeathScreen() {
           {formatActiveDuration(c.activeSeconds)} de vie active partagée. Son nom
           rejoint le mémorial.
         </p>
-        <NameForm label="Adopter un nouvel œuf" onSubmit={buryAndRestart} />
+
+        {c.children && c.children.length > 0 ? (
+          <section style={{ borderTop: '2px dashed rgba(0,0,0,0.1)', marginTop: '12px', paddingTop: '12px' }}>
+            <h3>🐣 Choisir un successeur</h3>
+            <p className="panel-hint" style={{ marginBottom: '8px' }}>
+              Désigner un enfant comme héritier. Il démarrera au stade <strong>blob</strong> et <strong>conservera toutes les compétences actives</strong> !
+            </p>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '8px 0' }}>
+              {c.children.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedChildIndex(idx)}
+                  style={{
+                    padding: '8px 12px',
+                    border: selectedChildIndex === idx ? '3px solid var(--gold)' : '1px solid #ccc',
+                    borderRadius: '8px',
+                    background: selectedChildIndex === idx ? 'rgba(247,200,115,0.1)' : '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '70px'
+                  }}
+                  type="button"
+                >
+                  <span style={{ fontSize: '1.5em' }}>👶</span>
+                  <span style={{ fontSize: '0.8em', color: 'var(--ink-soft)' }}>Enfant #{idx + 1}</span>
+                </button>
+              ))}
+            </div>
+
+            {selectedChildIndex !== null && (
+              <form onSubmit={handleSucceedSubmit} style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input
+                  value={successorName}
+                  onChange={(e) => setSuccessorName(e.target.value)}
+                  placeholder="Nom du successeur..."
+                  maxLength={16}
+                  required
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #ccc',
+                    padding: '6px 10px',
+                    borderRadius: '4px',
+                    font: 'inherit'
+                  }}
+                />
+                <button className="btn-primary" type="submit">
+                  Faire succéder l'Enfant #{selectedChildIndex + 1}
+                </button>
+              </form>
+            )}
+
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', marginTop: '16px', paddingTop: '12px' }}>
+              <p className="panel-hint" style={{ marginBottom: '6px' }}>Ou recommencer à zéro avec un œuf :</p>
+              <NameForm label="Adopter un nouvel œuf" onSubmit={buryAndRestart} />
+            </div>
+          </section>
+        ) : (
+          <NameForm label="Adopter un nouvel œuf" onSubmit={buryAndRestart} />
+        )}
+
         <Memorial game={game} />
       </div>
     </div>

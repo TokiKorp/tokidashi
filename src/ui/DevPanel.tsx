@@ -37,6 +37,8 @@ export function DevPanel({ onClose }: Props) {
     setNotificationsEnabled,
     setNotifyThingsDone,
     setNotifyNeedsAttention,
+    disableEnemies,
+    setDisableEnemies,
   } = useTokidachi();
   const provider = providerById(providerId);
   const unlimited = game.capacity.unlimited ?? false;
@@ -204,6 +206,15 @@ export function DevPanel({ onClose }: Props) {
                   ? (language === 'fr' ? 'Simuler le déverrouillage' : 'Simulate Unlock') 
                   : (language === 'fr' ? 'Simuler le verrouillage' : 'Simulate Lock')}
               </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9em', marginTop: '8px', marginBottom: '8px', color: '#fff' }}>
+                <input
+                  type="checkbox"
+                  checked={disableEnemies}
+                  onChange={(e) => setDisableEnemies(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {language === 'fr' ? 'Désactiver les ennemis (Pigeon, fourmis, etc.)' : 'Disable enemies (Pigeon, ants, etc.)'}
+              </label>
               <button 
                 className="btn-danger" 
                 style={{ marginTop: '8px', padding: '6px' }} 

@@ -10,6 +10,7 @@ export interface SaveData {
   providerId: string;
   selectedCli?: 'random' | 'agy' | 'codex' | 'claude';
   devMode?: boolean;
+  disableEnemies?: boolean;
   notificationsEnabled?: boolean;
   notifyThingsDone?: boolean;
   notifyNeedsAttention?: boolean;
